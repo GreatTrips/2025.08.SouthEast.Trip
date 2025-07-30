@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive Southern Journey Itinerary</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Merriweather:wght@400;700&family=Roboto:wght@400;500&display=swap" rel="stylesheet">
+    <!-- Chosen Palette: Vintage Blueprint -->
+    <!-- Application Structure Plan: The application is structured as an interactive timeline dashboard. A sticky horizontal timeline at the top allows users to navigate to any of the 15 days instantly. The main content area is a vertical, scrollable timeline where each day is presented as a card. This structure was chosen to preserve the chronological nature of the itinerary while adding a much-needed layer of non-linear navigation. Key information, like the detailed "Dossiers," is hidden by default within expandable sections to keep the main view uncluttered and focused on the day's agenda. This allows users to control the level of detail they engage with. -->
+    <!-- Visualization & Content Choices: 
+    - Report Info: 15-day itinerary -> Goal: Organize/Navigate -> Viz: Vertical and Horizontal Timelines (HTML/Tailwind) -> Interaction: Click on top timeline to scroll to the day's section -> Justification: Provides both a high-level overview and easy deep-dives, which is ideal for a multi-day plan.
+    - Report Info: Columbia Dossier (text) -> Goal: Organize/Inform -> Viz: Expandable accordion section (HTML/JS) -> Interaction: Click a "View Dossier" button to reveal detailed text and a chart -> Justification: Manages information density effectively, preventing the UI from being overwhelmed with text.
+    - Report Info: Building Heights (State House 180ft, BoA Plaza 388ft) -> Goal: Compare -> Viz: Bar Chart (Chart.js) -> Interaction: Hover tooltips -> Justification: Translates numerical data from the text into an immediate, easy-to-grasp visual comparison, adding analytical value.
+    -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+    <style>
+        body {
+            font-family: 'Roboto', sans-serif;
+            background-color: #F8FAFC; /* slate-50 */
+            color: #1E293B; /* slate-800 */
+        }
+        h1, h2, h3, h4 {
+            font-family: 'Merriweather', serif;
+        }
+        .timeline-nav-item {
+            transition: background-color 0.3s ease, color 0.3s ease;
+            cursor: pointer;
+        }
+        .timeline-nav-item.active {
+            background-color: #334155; /* slate-700 */
+            color: #F8FAFC; /* slate-50 */
+        }
+        .dossier-content {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.7s ease-in-out, padding 0.5s ease;
+            padding: 0 1.5rem;
+        }
+        .dossier-content.open {
+            max-height: 1000px; /* Large enough to fit content */
+            padding: 1.5rem 1.5rem;
+        }
+        .chart-container {
+            position: relative;
+            width: 100%;
+            max-width: 500px;
+            margin-left: auto;
+            margin-right: auto;
+            height: 300px;
+            max-height: 40vh;
+        }
+    </style>
+</head>
+<body class="antialiased">
+
+    <header class="bg-white/90 backdrop-blur-sm sticky top-0 z-50 shadow-md">
+        <div class="container mx-auto px-4 py-3">
+            <h1 class="text-2xl font-bold text-center text-slate-800 mb-3">A 15-Day Southern Journey</h1>
+            <div id="timeline-nav" class="flex flex-nowrap overflow-x-auto pb-2 -mb-2">
+                <!-- Timeline navigation will be injected here by JS -->
+            </div>
+        </div>
+    </header>
+
+    <main class="container mx-auto px-4 py-8">
+        <div class="relative">
+            <!-- Vertical line for the timeline -->
+            <div class="absolute left-4 md:left-1/2 -ml-px w-0.5 h-full bg-slate-300"></div>
+
+            <div id="itinerary-content">
+                <!-- Day 1 Content -->
+                <div id="day-1" class="day-section mb-12">
+                    <div class="flex md:grid md:grid-cols-2 items-start">
+                        <div class="flex-shrink-0 w-8 h-8 bg-slate-700 rounded-full flex items-center justify-center mr-4 md:mr-0 md:ml-auto md:order-2"><span class="text-white font-bold text-sm">1</span></div>
+                        <div class="w-full md:pr-8 md:order-1">
+                            <div class="bg-white p-6 rounded-lg shadow-lg">
+                                <h2 class="text-2xl font-bold mb-1">Day 1: Tuesday, August 5, 2025</h2>
+                                <h3 class="text-lg text-slate-600 font-medium mb-4">Arrival and Journey to the Capital</h3>
+                                <p class="text-slate-700 leading-relaxed mb-4">Your 15-day exploration of the American South begins this afternoon upon your arrival at Charleston International Airport. After securing your rental vehicle, your journey will commence not on the coast, but with an immediate two-hour drive inland to the state capital of South Carolina, Columbia. This initial leg of the trip takes you from the low-lying, humid coastal plain into the rolling hills of the state's interior, a transition that sets the stage for the diverse landscapes to come.</p>
+                                <div class="bg-slate-50 p-4 rounded-md border border-slate-200"><h4 class="font-bold text-slate-800">📍 First Stop: Quirky Public Art</h4><p class="text-slate-700 leading-relaxed mt-2">A quick stop at the corner of Marion and Taylor Streets reveals the **World's Largest Fire Hydrant**, a sculpture titled "Busted Plug." At nearly 40 feet tall and weighing 675,000 pounds, this tilted, gushing sculpture by artist Blue Sky is a fun, unexpected landmark and a perfect, lighthearted photo op to officially mark the start of your travels.</p></div>
+                                <div class="mt-6"><button data-dossier="columbia" class="dossier-toggle-btn w-full bg-slate-700 text-white font-bold py-2 px-4 rounded-md hover:bg-slate-800 transition-colors">View Columbia City Dossier</button><div id="dossier-columbia" class="dossier-content bg-slate-100 mt-4 rounded-md border border-slate-200"><h3 class="text-xl font-bold mt-2">Dossier: Columbia, South Carolina</h3><p class="text-slate-700 mt-2"><strong>Overview & Geography:</strong> The capital of South Carolina, Columbia is strategically situated on the <strong>Atlantic Seaboard Fall Line</strong>, where the hilly Piedmont region descends to the flat Coastal Plain. This location is defined by the confluence of the Saluda and Broad rivers, which merge here to form the Congaree River.</p><p class="text-slate-700 mt-2"><strong>Etymology & Nicknames:</strong> Named in 1786 for <strong>Christopher Columbus</strong>, representing a poetic, New World identity. Common nicknames include "The Capital of Southern Hospitality" and "The Cola."</p><h4 class="font-bold text-slate-800 mt-4">Distinguishing Skyline Features</h4><p class="text-slate-700 mt-2">Columbia's skyline is a modest but clear representation of its identity. The chart below compares the heights of its most significant government and commercial buildings.</p><div class="chart-container mt-4"><canvas id="columbiaSkylineChart"></canvas></div></div></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Day 2 Content -->
+                <div id="day-2" class="day-section mb-12">
+                    <div class="flex md:grid md:grid-cols-2 items-start">
+                        <div class="flex-shrink-0 w-8 h-8 bg-slate-700 rounded-full flex items-center justify-center mr-4 md:mr-0 md:ml-auto md:order-2"><span class="text-white font-bold text-sm">2</span></div>
+                        <div class="w-full md:pr-8 md:order-1">
+                            <div class="bg-white p-6 rounded-lg shadow-lg">
+                                <h2 class="text-2xl font-bold mb-1">Day 2: Wednesday, August 6, 2025</h2>
+                                <h3 class="text-lg text-slate-600 font-medium mb-4">Capital Exploration</h3>
+                                <p class="text-slate-700 leading-relaxed">Spend the day exploring Columbia's key sites. Start with a tour of the impressive **South Carolina State House**, noting the bronze stars that mark where Sherman's cannonballs struck during the Civil War. In the afternoon, visit the acclaimed **Riverbanks Zoo and Garden**, known for its natural habitat exhibits. Conclude the day with a relaxing stroll along the **Congaree Riverwalk**.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Day 3 Content -->
+                <div id="day-3" class="day-section mb-12">
+                    <div class="flex md:grid md:grid-cols-2 items-start">
+                        <div class="flex-shrink-0 w-8 h-8 bg-slate-700 rounded-full flex items-center justify-center mr-4 md:mr-0 md:ml-auto md:order-2"><span class="text-white font-bold text-sm">3</span></div>
+                        <div class="w-full md:pr-8 md:order-1">
+                            <div class="bg-white p-6 rounded-lg shadow-lg">
+                                <h2 class="text-2xl font-bold mb-1">Day 3: Thursday, August 7, 2025</h2>
+                                <h3 class="text-lg text-slate-600 font-medium mb-4">Return to the Lowcountry</h3>
+                                <p class="text-slate-700 leading-relaxed">Today you'll drive two hours back to the coast, arriving in the historic heart of the South: **Charleston**. After checking into your hotel in the historic district, take an evening stroll along The Battery, a fortified seawall, and admire the grand antebellum homes overlooking the harbor as the sun sets.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Day 4 Content -->
+                <div id="day-4" class="day-section mb-12">
+                     <div class="flex md:grid md:grid-cols-2 items-start">
+                        <div class="flex-shrink-0 w-8 h-8 bg-slate-700 rounded-full flex items-center justify-center mr-4 md:mr-0 md:ml-auto md:order-2"><span class="text-white font-bold text-sm">4</span></div>
+                        <div class="w-full md:pr-8 md:order-1">
+                            <div class="bg-white p-6 rounded-lg shadow-lg">
+                                <h2 class="text-2xl font-bold mb-1">Day 4: Friday, August 8, 2025</h2>
+                                <h3 class="text-lg text-slate-600 font-medium mb-4">Historic Charleston</h3>
+                                <p class="text-slate-700 leading-relaxed mb-4">Immerse yourself in American history with a morning ferry ride to **Fort Sumter**, where the first shots of the Civil War were fired. In the afternoon, wander through the charming streets south of Broad, photograph the iconic pastel-colored houses of **Rainbow Row**, and browse the stalls of the historic Charleston City Market.</p>
+                                <div class="mt-6"><button data-dossier="charleston" class="dossier-toggle-btn w-full bg-slate-700 text-white font-bold py-2 px-4 rounded-md hover:bg-slate-800 transition-colors">View Charleston City Dossier</button><div id="dossier-charleston" class="dossier-content bg-slate-100 mt-4 rounded-md border border-slate-200"><h3 class="text-xl font-bold mt-2">Dossier: Charleston, South Carolina</h3><p class="text-slate-700 mt-2"><strong>Overview:</strong> Founded in 1670, Charleston is defined by its cobblestone streets, horse-drawn carriages, and pastel antebellum houses. It's known as the "Holy City" due to the prominence of church steeples on its low-rise skyline.</p><p class="text-slate-700 mt-2"><strong>Architectural Influence:</strong> The city's unique "single house" architecture was designed to cope with the hot, humid climate, with long piazzas (porches) oriented to catch the prevailing sea breezes.</p><h4 class="font-bold text-slate-800 mt-4">The "Holy City" Steeple Count</h4><p class="text-slate-700 mt-2">Charleston's skyline is protected by ordinance, ensuring church steeples remain the most prominent features. The chart below shows the approximate spire heights of its most famous churches.</p><div class="chart-container mt-4"><canvas id="charlestonSteepleChart"></canvas></div></div></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Day 5 Content -->
+                <div id="day-5" class="day-section mb-12">
+                    <div class="flex md:grid md:grid-cols-2 items-start">
+                        <div class="flex-shrink-0 w-8 h-8 bg-slate-700 rounded-full flex items-center justify-center mr-4 md:mr-0 md:ml-auto md:order-2"><span class="text-white font-bold text-sm">5</span></div>
+                        <div class="w-full md:pr-8 md:order-1">
+                            <div class="bg-white p-6 rounded-lg shadow-lg">
+                                <h2 class="text-2xl font-bold mb-1">Day 5: Saturday, August 9, 2025</h2>
+                                <h3 class="text-lg text-slate-600 font-medium mb-4">Journey to Savannah</h3>
+                                <p class="text-slate-700 leading-relaxed">A scenic two-hour drive south takes you across the border into Georgia and to the enchanting city of **Savannah**. After settling in, spend your afternoon in **Forsyth Park**, marveling at its iconic fountain and the Spanish moss-draped oak trees that define the city's atmosphere.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Day 6 Content -->
+                <div id="day-6" class="day-section mb-12">
+                    <div class="flex md:grid md:grid-cols-2 items-start">
+                        <div class="flex-shrink-0 w-8 h-8 bg-slate-700 rounded-full flex items-center justify-center mr-4 md:mr-0 md:ml-auto md:order-2"><span class="text-white font-bold text-sm">6</span></div>
+                        <div class="w-full md:pr-8 md:order-1">
+                            <div class="bg-white p-6 rounded-lg shadow-lg">
+                                <h2 class="text-2xl font-bold mb-1">Day 6: Sunday, August 10, 2025</h2>
+                                <h3 class="text-lg text-slate-600 font-medium mb-4">The Squares of Savannah</h3>
+                                <p class="text-slate-700 leading-relaxed mb-4">Discover Savannah's unique city plan by taking a walking or trolley tour of its 22 historic squares. Each square acts as a neighborhood park, rich with monuments and history. In the evening, explore the lively atmosphere and converted cotton warehouses of **River Street**, watching massive container ships glide by on the Savannah River.</p>
+                                <div class="mt-6"><button data-dossier="savannah" class="dossier-toggle-btn w-full bg-slate-700 text-white font-bold py-2 px-4 rounded-md hover:bg-slate-800 transition-colors">View Savannah City Dossier</button><div id="dossier-savannah" class="dossier-content bg-slate-100 mt-4 rounded-md border border-slate-200"><h3 class="text-xl font-bold mt-2">Dossier: Savannah, Georgia</h3><p class="text-slate-700 mt-2"><strong>The Oglethorpe Plan:</strong> Savannah is America's first planned city. Its grid-like layout, known as the Oglethorpe Plan, was established in 1733 and is considered a masterpiece of urban planning.</p><p class="text-slate-700 mt-2"><strong>A Haunted History:</strong> Often cited as one of America's most haunted cities, Savannah's history of wars, disease, and fires has led to countless ghost stories and a thriving ghost tour industry.</p><h4 class="font-bold text-slate-800 mt-4">Historic Squares by the Numbers</h4><p class="text-slate-700 mt-2">The city's squares are its defining feature. The chart visualizes the original plan versus the number of squares that survive today.</p><div class="chart-container mt-4"><canvas id="savannahSquaresChart"></canvas></div></div></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Day 7 Content -->
+                <div id="day-7" class="day-section mb-12">
+                    <div class="flex md:grid md:grid-cols-2 items-start">
+                        <div class="flex-shrink-0 w-8 h-8 bg-slate-700 rounded-full flex items-center justify-center mr-4 md:mr-0 md:ml-auto md:order-2"><span class="text-white font-bold text-sm">7</span></div>
+                        <div class="w-full md:pr-8 md:order-1">
+                            <div class="bg-white p-6 rounded-lg shadow-lg">
+                                <h2 class="text-2xl font-bold mb-1">Day 7: Monday, August 11, 2025</h2>
+                                <h3 class="text-lg text-slate-600 font-medium mb-4">Drive to the Modern South</h3>
+                                <p class="text-slate-700 leading-relaxed">Today involves a four-hour drive west to **Atlanta**, the sprawling capital of Georgia and a hub of the New South. The transition from the historic coast to this bustling metropolis is stark. Check into your hotel and spend the evening exploring the vibrant Midtown neighborhood.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Day 8 Content -->
+                <div id="day-8" class="day-section mb-12">
+                     <div class="flex md:grid md:grid-cols-2 items-start">
+                        <div class="flex-shrink-0 w-8 h-8 bg-slate-700 rounded-full flex items-center justify-center mr-4 md:mr-0 md:ml-auto md:order-2"><span class="text-white font-bold text-sm">8</span></div>
+                        <div class="w-full md:pr-8 md:order-1">
+                            <div class="bg-white p-6 rounded-lg shadow-lg">
+                                <h2 class="text-2xl font-bold mb-1">Day 8: Tuesday, August 12, 2025</h2>
+                                <h3 class="text-lg text-slate-600 font-medium mb-4">Atlanta's Icons</h3>
+                                <p class="text-slate-700 leading-relaxed mb-4">Visit Centennial Olympic Park, the legacy of the 1996 Olympic Games. Spend your day at two of Atlanta's most famous attractions located here: the massive **Georgia Aquarium**, one of the largest in the world, and the **World of Coca-Cola**, an interactive museum dedicated to the iconic beverage that was invented here.</p>
+                                <div class="mt-6"><button data-dossier="atlanta" class="dossier-toggle-btn w-full bg-slate-700 text-white font-bold py-2 px-4 rounded-md hover:bg-slate-800 transition-colors">View Atlanta City Dossier</button><div id="dossier-atlanta" class="dossier-content bg-slate-100 mt-4 rounded-md border border-slate-200"><h3 class="text-xl font-bold mt-2">Dossier: Atlanta, Georgia</h3><p class="text-slate-700 mt-2"><strong>A City Reborn:</strong> Completely burned during the Civil War, Atlanta's symbol is the Phoenix, a mythical bird that rises from the ashes. This represents its post-war reconstruction and its emergence as a national center of commerce.</p><p class="text-slate-700 mt-2"><strong>Transportation Hub:</strong> Hartsfield-Jackson Atlanta International Airport is consistently one of the busiest airports in the world, making the city a critical gateway to the United States.</p><h4 class="font-bold text-slate-800 mt-4">Clash of the Titans: Atlanta's Skyline</h4><p class="text-slate-700 mt-2">Atlanta boasts the tallest skyline in the South. This chart compares its tallest skyscrapers.</p><div class="chart-container mt-4"><canvas id="atlantaSkylineChart"></canvas></div></div></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Day 9 Content -->
+                <div id="day-9" class="day-section mb-12">
+                    <div class="flex md:grid md:grid-cols-2 items-start">
+                        <div class="flex-shrink-0 w-8 h-8 bg-slate-700 rounded-full flex items-center justify-center mr-4 md:mr-0 md:ml-auto md:order-2"><span class="text-white font-bold text-sm">9</span></div>
+                        <div class="w-full md:pr-8 md:order-1">
+                            <div class="bg-white p-6 rounded-lg shadow-lg">
+                                <h2 class="text-2xl font-bold mb-1">Day 9: Wednesday, August 13, 2025</h2>
+                                <h3 class="text-lg text-slate-600 font-medium mb-4">On the Road to Music City</h3>
+                                <p class="text-slate-700 leading-relaxed">A four-hour drive northwest takes you into Tennessee and to its capital, **Nashville**, also known as "Music City." After checking in, dive headfirst into the city's culture with an evening on **Lower Broadway**, where live country music spills out of every honky-tonk bar.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Day 10 Content -->
+                <div id="day-10" class="day-section mb-12">
+                    <div class="flex md:grid md:grid-cols-2 items-start">
+                        <div class="flex-shrink-0 w-8 h-8 bg-slate-700 rounded-full flex items-center justify-center mr-4 md:mr-0 md:ml-auto md:order-2"><span class="text-white font-bold text-sm">10</span></div>
+                        <div class="w-full md:pr-8 md:order-1">
+                            <div class="bg-white p-6 rounded-lg shadow-lg">
+                                <h2 class="text-2xl font-bold mb-1">Day 10: Thursday, August 14, 2025</h2>
+                                <h3 class="text-lg text-slate-600 font-medium mb-4">The Sound of Nashville</h3>
+                                <p class="text-slate-700 leading-relaxed">Today is all about music history. Spend the morning at the **Country Music Hall of Fame and Museum**. In the afternoon, take a tour of the historic **Ryman Auditorium**, the "Mother Church of Country Music." If you can, catch a show at the Grand Ole Opry in the evening.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Day 11 Content -->
+                <div id="day-11" class="day-section mb-12">
+                    <div class="flex md:grid md:grid-cols-2 items-start">
+                        <div class="flex-shrink-0 w-8 h-8 bg-slate-700 rounded-full flex items-center justify-center mr-4 md:mr-0 md:ml-auto md:order-2"><span class="text-white font-bold text-sm">11</span></div>
+                        <div class="w-full md:pr-8 md:order-1">
+                            <div class="bg-white p-6 rounded-lg shadow-lg">
+                                <h2 class="text-2xl font-bold mb-1">Day 11: Friday, August 15, 2025</h2>
+                                <h3 class="text-lg text-slate-600 font-medium mb-4">Home of the Blues</h3>
+                                <p class="text-slate-700 leading-relaxed">Drive three hours west to **Memphis**, a city whose gritty soul has produced some of the most influential music in the world. Settle in and then head straight for **Beale Street**, the heart of the blues scene, for an evening of live music and world-famous barbecue.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Day 12 Content -->
+                <div id="day-12" class="day-section mb-12">
+                    <div class="flex md:grid md:grid-cols-2 items-start">
+                        <div class="flex-shrink-0 w-8 h-8 bg-slate-700 rounded-full flex items-center justify-center mr-4 md:mr-0 md:ml-auto md:order-2"><span class="text-white font-bold text-sm">12</span></div>
+                        <div class="w-full md:pr-8 md:order-1">
+                            <div class="bg-white p-6 rounded-lg shadow-lg">
+                                <h2 class="text-2xl font-bold mb-1">Day 12: Saturday, August 16, 2025</h2>
+                                <h3 class="text-lg text-slate-600 font-medium mb-4">The King and the Birth of Rock 'n' Roll</h3>
+                                <p class="text-slate-700 leading-relaxed">Make the pilgrimage to **Graceland**, the iconic home of Elvis Presley. Afterwards, visit **Sun Studio**, the legendary recording studio where Elvis, Johnny Cash, and Jerry Lee Lewis got their starts, and feel the history in the room where rock 'n' roll was born.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Day 13 Content -->
+                <div id="day-13" class="day-section mb-12">
+                    <div class="flex md:grid md:grid-cols-2 items-start">
+                        <div class="flex-shrink-0 w-8 h-8 bg-slate-700 rounded-full flex items-center justify-center mr-4 md:mr-0 md:ml-auto md:order-2"><span class="text-white font-bold text-sm">13</span></div>
+                        <div class="w-full md:pr-8 md:order-1">
+                            <div class="bg-white p-6 rounded-lg shadow-lg">
+                                <h2 class="text-2xl font-bold mb-1">Day 13: Sunday, August 17, 2025</h2>
+                                <h3 class="text-lg text-slate-600 font-medium mb-4">Down to the Bayou</h3>
+                                <p class="text-slate-700 leading-relaxed">A long six-hour drive south through the Mississippi Delta brings you to your final destination: **New Orleans, Louisiana**. The change in culture, cuisine, and architecture is immediate and profound. Check into your hotel in the **French Quarter** and spend your first evening soaking in the unique, vibrant atmosphere of Bourbon Street.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Day 14 Content -->
+                <div id="day-14" class="day-section mb-12">
+                    <div class="flex md:grid md:grid-cols-2 items-start">
+                        <div class="flex-shrink-0 w-8 h-8 bg-slate-700 rounded-full flex items-center justify-center mr-4 md:mr-0 md:ml-auto md:order-2"><span class="text-white font-bold text-sm">14</span></div>
+                        <div class="w-full md:pr-8 md:order-1">
+                            <div class="bg-white p-6 rounded-lg shadow-lg">
+                                <h2 class="text-2xl font-bold mb-1">Day 14: Monday, August 18, 2025</h2>
+                                <h3 class="text-lg text-slate-600 font-medium mb-4">The Big Easy</h3>
+                                <p class="text-slate-700 leading-relaxed">Spend your last full day exploring the best of New Orleans. Ride the historic St. Charles Streetcar through the stately **Garden District**, enjoy beignets and café au lait at Café Du Monde, and take an afternoon airboat tour through the nearby bayous to see alligators in their natural habitat. Enjoy a final farewell dinner of classic Creole cuisine.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Day 15 Content -->
+                <div id="day-15" class="day-section mb-12">
+                    <div class="flex md:grid md:grid-cols-2 items-start">
+                        <div class="flex-shrink-0 w-8 h-8 bg-slate-700 rounded-full flex items-center justify-center mr-4 md:mr-0 md:ml-auto md:order-2"><span class="text-white font-bold text-sm">15</span></div>
+                        <div class="w-full md:pr-8 md:order-1">
+                            <div class="bg-white p-6 rounded-lg shadow-lg">
+                                <h2 class="text-2xl font-bold mb-1">Day 15: Tuesday, August 19, 2025</h2>
+                                <h3 class="text-lg text-slate-600 font-medium mb-4">Departure</h3>
+                                <p class="text-slate-700 leading-relaxed">After a final Southern breakfast, drive to Louis Armstrong New Orleans International Airport (MSY) to return your rental vehicle and catch your flight home, concluding your 15-day journey through the heart of the American South.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const timelineNav = document.getElementById('timeline-nav');
+            const daySections = document.querySelectorAll('.day-section');
+            let columbiaChart, charlestonChart, savannahChart, atlantaChart;
+
+            // --- Populate Timeline Navigation ---
+            for (let i = 1; i <= 15; i++) {
+                const navItem = document.createElement('a');
+                navItem.textContent = `Day ${i}`;
+                navItem.href = `#day-${i}`;
+                navItem.dataset.day = i;
+                navItem.className = 'timeline-nav-item flex-shrink-0 text-center text-sm font-medium text-slate-600 bg-slate-200 rounded-full px-4 py-2 mr-2 hover:bg-slate-300';
+                timelineNav.appendChild(navItem);
+            }
+            const navItems = document.querySelectorAll('.timeline-nav-item');
+
+            // --- Dossier Toggle Logic ---
+            const dossierToggles = document.querySelectorAll('.dossier-toggle-btn');
+            dossierToggles.forEach(button => {
+                button.addEventListener('click', () => {
+                    const dossierId = button.dataset.dossier;
+                    const content = document.getElementById(`dossier-${dossierId}`);
+                    content.classList.toggle('open');
+                    
+                    if (content.classList.contains('open')) {
+                        switch(dossierId) {
+                            case 'columbia': if (!columbiaChart) renderColumbiaChart(); break;
+                            case 'charleston': if (!charlestonChart) renderCharlestonChart(); break;
+                            case 'savannah': if (!savannahChart) renderSavannahChart(); break;
+                            case 'atlanta': if (!atlantaChart) renderAtlantaChart(); break;
+                        }
+                    }
+                });
+            });
+
+            // --- Chart Rendering Functions ---
+            const defaultChartOptions = {
+                responsive: true,
+                maintainAspectRatio: false,
+                indexAxis: 'y',
+                scales: { x: { beginAtZero: true }, y: { grid: { display: false } } },
+                plugins: { legend: { display: false } }
+            };
+
+            function renderColumbiaChart() {
+                const ctx = document.getElementById('columbiaSkylineChart').getContext('2d');
+                columbiaChart = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: ['SC State House', 'Bank of America Plaza'],
+                        datasets: [{ label: 'Height (feet)', data: [180, 388], backgroundColor: ['rgba(51, 65, 85, 0.7)', 'rgba(29, 78, 216, 0.7)'], borderWidth: 1, borderRadius: 4 }]
+                    },
+                    options: { ...defaultChartOptions, scales: { x: { beginAtZero: true, title: { display: true, text: 'Height (ft)' } }, y: { grid: { display: false } } } }
+                });
+            }
+
+            function renderCharlestonChart() {
+                const ctx = document.getElementById('charlestonSteepleChart').getContext('2d');
+                charlestonChart = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: ["St. Philip's", "St. Michael's", "Cathedral of St. John"],
+                        datasets: [{ label: 'Height (feet)', data: [200, 186, 175], backgroundColor: 'rgba(51, 65, 85, 0.7)', borderWidth: 1, borderRadius: 4 }]
+                    },
+                    options: { ...defaultChartOptions, scales: { x: { beginAtZero: true, title: { display: true, text: 'Spire Height (ft)' } }, y: { grid: { display: false } } } }
+                });
+            }
+            
+            function renderSavannahChart() {
+                const ctx = document.getElementById('savannahSquaresChart').getContext('2d');
+                savannahChart = new Chart(ctx, {
+                    type: 'pie',
+                    data: {
+                        labels: ['Surviving Squares', 'Lost Squares'],
+                        datasets: [{ label: 'Count', data: [22, 2], backgroundColor: ['rgba(29, 78, 216, 0.7)', 'rgba(203, 213, 225, 0.7)'], borderWidth: 1 }]
+                    },
+                    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'top' } } }
+                });
+            }
+            
+            function renderAtlantaChart() {
+                const ctx = document.getElementById('atlantaSkylineChart').getContext('2d');
+                atlantaChart = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: ['Bank of America Plaza', 'Truist Plaza', '1180 Peachtree'],
+                        datasets: [{ label: 'Height (feet)', data: [1023, 902, 645], backgroundColor: 'rgba(29, 78, 216, 0.7)', borderWidth: 1, borderRadius: 4 }]
+                    },
+                    options: { ...defaultChartOptions, scales: { x: { beginAtZero: true, title: { display: true, text: 'Height (ft)' } }, y: { grid: { display: false } } } }
+                });
+            }
+
+            // --- Scrollspy for Active Nav Item ---
+            const observer = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        const dayId = entry.target.id.split('-')[1];
+                        navItems.forEach(item => {
+                            item.classList.toggle('active', item.dataset.day === dayId);
+                        });
+                    }
+                });
+            }, { rootMargin: "-50% 0px -50% 0px" });
+
+            daySections.forEach(section => {
+                if (section.id) {
+                    observer.observe(section);
+                }
+            });
+            
+            // Set initial active state
+            if (navItems.length > 0) {
+                navItems[0].classList.add('active');
+            }
+        });
+    </script>
+</body>
+</html>
