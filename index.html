@@ -3,18 +3,20 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Interactive Southern Journey Itinerary</title>
+    <title>Interactive Southern Journey Dossier</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Merriweather:wght@400;700&family=Roboto:wght@400;500&display=swap" rel="stylesheet">
     <!-- Chosen Palette: Vintage Blueprint -->
-    <!-- Application Structure Plan: The application is structured as an interactive timeline dashboard. A sticky horizontal timeline at the top allows users to navigate to any of the 15 days instantly. The main content area is a vertical, scrollable timeline where each day is presented as a card. This structure was chosen to preserve the chronological nature of the itinerary while adding a much-needed layer of non-linear navigation. Key information, like the detailed "Dossiers," is hidden by default within expandable sections to keep the main view uncluttered and focused on the day's agenda. This allows users to control the level of detail they engage with. -->
+    <!-- Application Structure Plan: The application uses an interactive timeline dashboard structure. A collapsible vertical navigation bar on the left allows instant navigation to any day. The main content is a vertical timeline where each day is a card. This preserves the chronological flow while adding a modern, space-saving navigation system. Key information, like the detailed "Dossiers," is hidden by default within expandable sections to keep the main view uncluttered. A version switcher at the top dynamically rebuilds the itinerary based on different travel themes (A, B, C). -->
     <!-- Visualization & Content Choices: 
-    - Report Info: 15-day itinerary -> Goal: Organize/Navigate -> Viz: Vertical and Horizontal Timelines (HTML/Tailwind) -> Interaction: Click on top timeline to scroll to the day's section -> Justification: Provides both a high-level overview and easy deep-dives, which is ideal for a multi-day plan.
-    - Report Info: Columbia Dossier (text) -> Goal: Organize/Inform -> Viz: Expandable accordion section (HTML/JS) -> Interaction: Click a "View Dossier" button to reveal detailed text and a chart -> Justification: Manages information density effectively, preventing the UI from being overwhelmed with text.
-    - Report Info: Building Heights (State House 180ft, BoA Plaza 388ft) -> Goal: Compare -> Viz: Bar Chart (Chart.js) -> Interaction: Hover tooltips -> Justification: Translates numerical data from the text into an immediate, easy-to-grasp visual comparison, adding analytical value.
+    - Report Info: 15-day itinerary -> Goal: Organize/Navigate -> Viz: Vertical and Horizontal Timelines (HTML/Tailwind) -> Interaction: Click on a day in the vertical nav to scroll to the section -> Justification: Provides a clean, on-demand navigation experience.
+    - Report Info: Columbia Dossier (text) -> Goal: Organize/Inform -> Viz: Expandable accordion section (HTML/JS) -> Interaction: Click a "View Dossier" button to reveal detailed text and a table -> Justification: Manages information density effectively.
+    - Report Info: Building Heights (State House 180ft, BoA Plaza 388ft) -> Goal: Compare -> Viz: Styled HTML Table -> Interaction: None -> Justification: Replaces the bar graph with a clear, direct textual comparison of data as requested, focusing on readability.
     -->
     <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
     <style>
@@ -23,16 +25,28 @@
             background-color: #F8FAFC; /* slate-50 */
             color: #1E293B; /* slate-800 */
         }
-        h1, h2, h3, h4 {
+        h1, h2, h3, h4, h5 {
             font-family: 'Merriweather', serif;
         }
-        .timeline-nav-item {
-            transition: background-color 0.3s ease, color 0.3s ease;
-            cursor: pointer;
+        #vertical-nav {
+            transform: translateX(-100%);
+            transition: transform 0.3s ease-in-out;
         }
-        .timeline-nav-item.active {
+        #vertical-nav.open {
+            transform: translateX(0);
+        }
+        .nav-link {
+            transition: background-color 0.2s ease, color 0.2s ease;
+        }
+        .nav-link.active {
             background-color: #334155; /* slate-700 */
             color: #F8FAFC; /* slate-50 */
+        }
+        .nav-link.active .text-slate-500 {
+            color: #cbd5e1; /* slate-300 */
+        }
+        main {
+            transition: margin-left 0.3s ease-in-out;
         }
         .dossier-content {
             max-height: 0;
@@ -41,369 +55,479 @@
             padding: 0 1.5rem;
         }
         .dossier-content.open {
-            max-height: 1000px; /* Large enough to fit content */
+            max-height: 2500px; /* Increased max-height for more content */
             padding: 1.5rem 1.5rem;
         }
-        .chart-container {
-            position: relative;
+        .comparison-table {
             width: 100%;
             max-width: 500px;
             margin-left: auto;
             margin-right: auto;
-            height: 300px;
-            max-height: 40vh;
+            border-collapse: collapse;
+            margin-top: 1rem;
+        }
+        .comparison-table th, .comparison-table td {
+            text-align: left;
+            padding: 0.75rem;
+            border-bottom: 1px solid #E2E8F0; /* slate-200 */
+        }
+        .comparison-table th {
+            background-color: #F1F5F9; /* slate-100 */
+            font-weight: 500;
+        }
+        .comparison-table tr:last-child td {
+            border-bottom: none;
+        }
+        .dossier-content h4 {
+            font-weight: bold;
+            color: #1E293B; /* slate-800 */
+            margin-top: 1rem;
+        }
+        .dossier-content p, .dossier-content ul {
+            margin-top: 0.5rem;
+        }
+        .day-itinerary h5 {
+            font-weight: bold;
+            margin-top: 1rem;
+            color: #334155;
+        }
+        .version-btn, .view-tab {
+            transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+        }
+        .view-tab.active {
+            border-bottom-color: #334155;
+            color: #334155;
+            font-weight: 600;
+        }
+        .version-btn.active {
+            background-color: #334155;
+            color: white;
+        }
+        .plan-visit {
+            background-color: #f1f5f9;
+            border-left: 4px solid #64748b;
+            padding: 1rem;
+            margin-top: 1rem;
+            border-radius: 0.25rem;
+        }
+        #map {
+            height: 80vh;
+            border-radius: 0.5rem;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
         }
     </style>
 </head>
 <body class="antialiased">
 
-    <header class="bg-white/90 backdrop-blur-sm sticky top-0 z-50 shadow-md">
-        <div class="container mx-auto px-4 py-3">
-            <h1 class="text-2xl font-bold text-center text-slate-800 mb-3">A 15-Day Southern Journey</h1>
-            <div id="timeline-nav" class="flex flex-nowrap overflow-x-auto pb-2 -mb-2">
-                <!-- Timeline navigation will be injected here by JS -->
+    <!-- Vertical Navigation -->
+    <nav id="vertical-nav" class="fixed top-0 left-0 h-full w-64 bg-white shadow-lg z-50 p-4 overflow-y-auto">
+        <h2 class="text-xl font-bold text-slate-800 mb-4 text-center">Journey Timeline</h2>
+        <div id="day-links-container" class="space-y-2">
+            <!-- Day links will be injected here by JS -->
+        </div>
+    </nav>
+
+    <!-- Navigation Toggle Button -->
+    <button id="nav-toggle" class="fixed top-1/2 -translate-y-1/2 left-0 z-50 bg-slate-700 text-white w-8 h-16 rounded-r-lg flex items-center justify-center transition-all duration-300 ease-in-out hover:bg-slate-800">
+        <span id="nav-arrow">&raquo;</span>
+    </button>
+
+    <header class="bg-white/90 backdrop-blur-sm sticky top-0 z-40 shadow-sm">
+        <div class="container mx-auto px-4 pt-3">
+            <h1 class="text-2xl font-bold text-center text-slate-800">A 15-Day Southern Journey</h1>
+            <div class="border-b border-slate-200 mt-4">
+                <nav class="-mb-px flex justify-center space-x-8" aria-label="Tabs">
+                    <button class="view-tab active whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm text-slate-500 hover:text-slate-700 hover:border-slate-300" data-view="itinerary">
+                        Itinerary
+                    </button>
+                    <button class="view-tab whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm text-slate-500 hover:text-slate-700 hover:border-slate-300" data-view="map">
+                        Map View
+                    </button>
+                </nav>
             </div>
         </div>
     </header>
 
-    <main class="container mx-auto px-4 py-8">
-        <div class="relative">
-            <!-- Vertical line for the timeline -->
-            <div class="absolute left-4 md:left-1/2 -ml-px w-0.5 h-full bg-slate-300"></div>
-
-            <div id="itinerary-content">
-                <!-- Day 1 Content -->
-                <div id="day-1" class="day-section mb-12">
-                    <div class="flex md:grid md:grid-cols-2 items-start">
-                        <div class="flex-shrink-0 w-8 h-8 bg-slate-700 rounded-full flex items-center justify-center mr-4 md:mr-0 md:ml-auto md:order-2"><span class="text-white font-bold text-sm">1</span></div>
-                        <div class="w-full md:pr-8 md:order-1">
-                            <div class="bg-white p-6 rounded-lg shadow-lg">
-                                <h2 class="text-2xl font-bold mb-1">Day 1: Tuesday, August 5, 2025</h2>
-                                <h3 class="text-lg text-slate-600 font-medium mb-4">Arrival and Journey to the Capital</h3>
-                                <p class="text-slate-700 leading-relaxed mb-4">Your 15-day exploration of the American South begins this afternoon upon your arrival at Charleston International Airport. After securing your rental vehicle, your journey will commence not on the coast, but with an immediate two-hour drive inland to the state capital of South Carolina, Columbia. This initial leg of the trip takes you from the low-lying, humid coastal plain into the rolling hills of the state's interior, a transition that sets the stage for the diverse landscapes to come.</p>
-                                <div class="bg-slate-50 p-4 rounded-md border border-slate-200"><h4 class="font-bold text-slate-800">📍 First Stop: Quirky Public Art</h4><p class="text-slate-700 leading-relaxed mt-2">A quick stop at the corner of Marion and Taylor Streets reveals the **World's Largest Fire Hydrant**, a sculpture titled "Busted Plug." At nearly 40 feet tall and weighing 675,000 pounds, this tilted, gushing sculpture by artist Blue Sky is a fun, unexpected landmark and a perfect, lighthearted photo op to officially mark the start of your travels.</p></div>
-                                <div class="mt-6"><button data-dossier="columbia" class="dossier-toggle-btn w-full bg-slate-700 text-white font-bold py-2 px-4 rounded-md hover:bg-slate-800 transition-colors">View Columbia City Dossier</button><div id="dossier-columbia" class="dossier-content bg-slate-100 mt-4 rounded-md border border-slate-200"><h3 class="text-xl font-bold mt-2">Dossier: Columbia, South Carolina</h3><p class="text-slate-700 mt-2"><strong>Overview & Geography:</strong> The capital of South Carolina, Columbia is strategically situated on the <strong>Atlantic Seaboard Fall Line</strong>, where the hilly Piedmont region descends to the flat Coastal Plain. This location is defined by the confluence of the Saluda and Broad rivers, which merge here to form the Congaree River.</p><p class="text-slate-700 mt-2"><strong>Etymology & Nicknames:</strong> Named in 1786 for <strong>Christopher Columbus</strong>, representing a poetic, New World identity. Common nicknames include "The Capital of Southern Hospitality" and "The Cola."</p><h4 class="font-bold text-slate-800 mt-4">Distinguishing Skyline Features</h4><p class="text-slate-700 mt-2">Columbia's skyline is a modest but clear representation of its identity. The chart below compares the heights of its most significant government and commercial buildings.</p><div class="chart-container mt-4"><canvas id="columbiaSkylineChart"></canvas></div></div></div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Day 2 Content -->
-                <div id="day-2" class="day-section mb-12">
-                    <div class="flex md:grid md:grid-cols-2 items-start">
-                        <div class="flex-shrink-0 w-8 h-8 bg-slate-700 rounded-full flex items-center justify-center mr-4 md:mr-0 md:ml-auto md:order-2"><span class="text-white font-bold text-sm">2</span></div>
-                        <div class="w-full md:pr-8 md:order-1">
-                            <div class="bg-white p-6 rounded-lg shadow-lg">
-                                <h2 class="text-2xl font-bold mb-1">Day 2: Wednesday, August 6, 2025</h2>
-                                <h3 class="text-lg text-slate-600 font-medium mb-4">Capital Exploration</h3>
-                                <p class="text-slate-700 leading-relaxed">Spend the day exploring Columbia's key sites. Start with a tour of the impressive **South Carolina State House**, noting the bronze stars that mark where Sherman's cannonballs struck during the Civil War. In the afternoon, visit the acclaimed **Riverbanks Zoo and Garden**, known for its natural habitat exhibits. Conclude the day with a relaxing stroll along the **Congaree Riverwalk**.</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Day 3 Content -->
-                <div id="day-3" class="day-section mb-12">
-                    <div class="flex md:grid md:grid-cols-2 items-start">
-                        <div class="flex-shrink-0 w-8 h-8 bg-slate-700 rounded-full flex items-center justify-center mr-4 md:mr-0 md:ml-auto md:order-2"><span class="text-white font-bold text-sm">3</span></div>
-                        <div class="w-full md:pr-8 md:order-1">
-                            <div class="bg-white p-6 rounded-lg shadow-lg">
-                                <h2 class="text-2xl font-bold mb-1">Day 3: Thursday, August 7, 2025</h2>
-                                <h3 class="text-lg text-slate-600 font-medium mb-4">Return to the Lowcountry</h3>
-                                <p class="text-slate-700 leading-relaxed">Today you'll drive two hours back to the coast, arriving in the historic heart of the South: **Charleston**. After checking into your hotel in the historic district, take an evening stroll along The Battery, a fortified seawall, and admire the grand antebellum homes overlooking the harbor as the sun sets.</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Day 4 Content -->
-                <div id="day-4" class="day-section mb-12">
-                     <div class="flex md:grid md:grid-cols-2 items-start">
-                        <div class="flex-shrink-0 w-8 h-8 bg-slate-700 rounded-full flex items-center justify-center mr-4 md:mr-0 md:ml-auto md:order-2"><span class="text-white font-bold text-sm">4</span></div>
-                        <div class="w-full md:pr-8 md:order-1">
-                            <div class="bg-white p-6 rounded-lg shadow-lg">
-                                <h2 class="text-2xl font-bold mb-1">Day 4: Friday, August 8, 2025</h2>
-                                <h3 class="text-lg text-slate-600 font-medium mb-4">Historic Charleston</h3>
-                                <p class="text-slate-700 leading-relaxed mb-4">Immerse yourself in American history with a morning ferry ride to **Fort Sumter**, where the first shots of the Civil War were fired. In the afternoon, wander through the charming streets south of Broad, photograph the iconic pastel-colored houses of **Rainbow Row**, and browse the stalls of the historic Charleston City Market.</p>
-                                <div class="mt-6"><button data-dossier="charleston" class="dossier-toggle-btn w-full bg-slate-700 text-white font-bold py-2 px-4 rounded-md hover:bg-slate-800 transition-colors">View Charleston City Dossier</button><div id="dossier-charleston" class="dossier-content bg-slate-100 mt-4 rounded-md border border-slate-200"><h3 class="text-xl font-bold mt-2">Dossier: Charleston, South Carolina</h3><p class="text-slate-700 mt-2"><strong>Overview:</strong> Founded in 1670, Charleston is defined by its cobblestone streets, horse-drawn carriages, and pastel antebellum houses. It's known as the "Holy City" due to the prominence of church steeples on its low-rise skyline.</p><p class="text-slate-700 mt-2"><strong>Architectural Influence:</strong> The city's unique "single house" architecture was designed to cope with the hot, humid climate, with long piazzas (porches) oriented to catch the prevailing sea breezes.</p><h4 class="font-bold text-slate-800 mt-4">The "Holy City" Steeple Count</h4><p class="text-slate-700 mt-2">Charleston's skyline is protected by ordinance, ensuring church steeples remain the most prominent features. The chart below shows the approximate spire heights of its most famous churches.</p><div class="chart-container mt-4"><canvas id="charlestonSteepleChart"></canvas></div></div></div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Day 5 Content -->
-                <div id="day-5" class="day-section mb-12">
-                    <div class="flex md:grid md:grid-cols-2 items-start">
-                        <div class="flex-shrink-0 w-8 h-8 bg-slate-700 rounded-full flex items-center justify-center mr-4 md:mr-0 md:ml-auto md:order-2"><span class="text-white font-bold text-sm">5</span></div>
-                        <div class="w-full md:pr-8 md:order-1">
-                            <div class="bg-white p-6 rounded-lg shadow-lg">
-                                <h2 class="text-2xl font-bold mb-1">Day 5: Saturday, August 9, 2025</h2>
-                                <h3 class="text-lg text-slate-600 font-medium mb-4">Journey to Savannah</h3>
-                                <p class="text-slate-700 leading-relaxed">A scenic two-hour drive south takes you across the border into Georgia and to the enchanting city of **Savannah**. After settling in, spend your afternoon in **Forsyth Park**, marveling at its iconic fountain and the Spanish moss-draped oak trees that define the city's atmosphere.</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                
-                <!-- Day 6 Content -->
-                <div id="day-6" class="day-section mb-12">
-                    <div class="flex md:grid md:grid-cols-2 items-start">
-                        <div class="flex-shrink-0 w-8 h-8 bg-slate-700 rounded-full flex items-center justify-center mr-4 md:mr-0 md:ml-auto md:order-2"><span class="text-white font-bold text-sm">6</span></div>
-                        <div class="w-full md:pr-8 md:order-1">
-                            <div class="bg-white p-6 rounded-lg shadow-lg">
-                                <h2 class="text-2xl font-bold mb-1">Day 6: Sunday, August 10, 2025</h2>
-                                <h3 class="text-lg text-slate-600 font-medium mb-4">The Squares of Savannah</h3>
-                                <p class="text-slate-700 leading-relaxed mb-4">Discover Savannah's unique city plan by taking a walking or trolley tour of its 22 historic squares. Each square acts as a neighborhood park, rich with monuments and history. In the evening, explore the lively atmosphere and converted cotton warehouses of **River Street**, watching massive container ships glide by on the Savannah River.</p>
-                                <div class="mt-6"><button data-dossier="savannah" class="dossier-toggle-btn w-full bg-slate-700 text-white font-bold py-2 px-4 rounded-md hover:bg-slate-800 transition-colors">View Savannah City Dossier</button><div id="dossier-savannah" class="dossier-content bg-slate-100 mt-4 rounded-md border border-slate-200"><h3 class="text-xl font-bold mt-2">Dossier: Savannah, Georgia</h3><p class="text-slate-700 mt-2"><strong>The Oglethorpe Plan:</strong> Savannah is America's first planned city. Its grid-like layout, known as the Oglethorpe Plan, was established in 1733 and is considered a masterpiece of urban planning.</p><p class="text-slate-700 mt-2"><strong>A Haunted History:</strong> Often cited as one of America's most haunted cities, Savannah's history of wars, disease, and fires has led to countless ghost stories and a thriving ghost tour industry.</p><h4 class="font-bold text-slate-800 mt-4">Historic Squares by the Numbers</h4><p class="text-slate-700 mt-2">The city's squares are its defining feature. The chart visualizes the original plan versus the number of squares that survive today.</p><div class="chart-container mt-4"><canvas id="savannahSquaresChart"></canvas></div></div></div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Day 7 Content -->
-                <div id="day-7" class="day-section mb-12">
-                    <div class="flex md:grid md:grid-cols-2 items-start">
-                        <div class="flex-shrink-0 w-8 h-8 bg-slate-700 rounded-full flex items-center justify-center mr-4 md:mr-0 md:ml-auto md:order-2"><span class="text-white font-bold text-sm">7</span></div>
-                        <div class="w-full md:pr-8 md:order-1">
-                            <div class="bg-white p-6 rounded-lg shadow-lg">
-                                <h2 class="text-2xl font-bold mb-1">Day 7: Monday, August 11, 2025</h2>
-                                <h3 class="text-lg text-slate-600 font-medium mb-4">Drive to the Modern South</h3>
-                                <p class="text-slate-700 leading-relaxed">Today involves a four-hour drive west to **Atlanta**, the sprawling capital of Georgia and a hub of the New South. The transition from the historic coast to this bustling metropolis is stark. Check into your hotel and spend the evening exploring the vibrant Midtown neighborhood.</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Day 8 Content -->
-                <div id="day-8" class="day-section mb-12">
-                     <div class="flex md:grid md:grid-cols-2 items-start">
-                        <div class="flex-shrink-0 w-8 h-8 bg-slate-700 rounded-full flex items-center justify-center mr-4 md:mr-0 md:ml-auto md:order-2"><span class="text-white font-bold text-sm">8</span></div>
-                        <div class="w-full md:pr-8 md:order-1">
-                            <div class="bg-white p-6 rounded-lg shadow-lg">
-                                <h2 class="text-2xl font-bold mb-1">Day 8: Tuesday, August 12, 2025</h2>
-                                <h3 class="text-lg text-slate-600 font-medium mb-4">Atlanta's Icons</h3>
-                                <p class="text-slate-700 leading-relaxed mb-4">Visit Centennial Olympic Park, the legacy of the 1996 Olympic Games. Spend your day at two of Atlanta's most famous attractions located here: the massive **Georgia Aquarium**, one of the largest in the world, and the **World of Coca-Cola**, an interactive museum dedicated to the iconic beverage that was invented here.</p>
-                                <div class="mt-6"><button data-dossier="atlanta" class="dossier-toggle-btn w-full bg-slate-700 text-white font-bold py-2 px-4 rounded-md hover:bg-slate-800 transition-colors">View Atlanta City Dossier</button><div id="dossier-atlanta" class="dossier-content bg-slate-100 mt-4 rounded-md border border-slate-200"><h3 class="text-xl font-bold mt-2">Dossier: Atlanta, Georgia</h3><p class="text-slate-700 mt-2"><strong>A City Reborn:</strong> Completely burned during the Civil War, Atlanta's symbol is the Phoenix, a mythical bird that rises from the ashes. This represents its post-war reconstruction and its emergence as a national center of commerce.</p><p class="text-slate-700 mt-2"><strong>Transportation Hub:</strong> Hartsfield-Jackson Atlanta International Airport is consistently one of the busiest airports in the world, making the city a critical gateway to the United States.</p><h4 class="font-bold text-slate-800 mt-4">Clash of the Titans: Atlanta's Skyline</h4><p class="text-slate-700 mt-2">Atlanta boasts the tallest skyline in the South. This chart compares its tallest skyscrapers.</p><div class="chart-container mt-4"><canvas id="atlantaSkylineChart"></canvas></div></div></div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Day 9 Content -->
-                <div id="day-9" class="day-section mb-12">
-                    <div class="flex md:grid md:grid-cols-2 items-start">
-                        <div class="flex-shrink-0 w-8 h-8 bg-slate-700 rounded-full flex items-center justify-center mr-4 md:mr-0 md:ml-auto md:order-2"><span class="text-white font-bold text-sm">9</span></div>
-                        <div class="w-full md:pr-8 md:order-1">
-                            <div class="bg-white p-6 rounded-lg shadow-lg">
-                                <h2 class="text-2xl font-bold mb-1">Day 9: Wednesday, August 13, 2025</h2>
-                                <h3 class="text-lg text-slate-600 font-medium mb-4">On the Road to Music City</h3>
-                                <p class="text-slate-700 leading-relaxed">A four-hour drive northwest takes you into Tennessee and to its capital, **Nashville**, also known as "Music City." After checking in, dive headfirst into the city's culture with an evening on **Lower Broadway**, where live country music spills out of every honky-tonk bar.</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Day 10 Content -->
-                <div id="day-10" class="day-section mb-12">
-                    <div class="flex md:grid md:grid-cols-2 items-start">
-                        <div class="flex-shrink-0 w-8 h-8 bg-slate-700 rounded-full flex items-center justify-center mr-4 md:mr-0 md:ml-auto md:order-2"><span class="text-white font-bold text-sm">10</span></div>
-                        <div class="w-full md:pr-8 md:order-1">
-                            <div class="bg-white p-6 rounded-lg shadow-lg">
-                                <h2 class="text-2xl font-bold mb-1">Day 10: Thursday, August 14, 2025</h2>
-                                <h3 class="text-lg text-slate-600 font-medium mb-4">The Sound of Nashville</h3>
-                                <p class="text-slate-700 leading-relaxed">Today is all about music history. Spend the morning at the **Country Music Hall of Fame and Museum**. In the afternoon, take a tour of the historic **Ryman Auditorium**, the "Mother Church of Country Music." If you can, catch a show at the Grand Ole Opry in the evening.</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Day 11 Content -->
-                <div id="day-11" class="day-section mb-12">
-                    <div class="flex md:grid md:grid-cols-2 items-start">
-                        <div class="flex-shrink-0 w-8 h-8 bg-slate-700 rounded-full flex items-center justify-center mr-4 md:mr-0 md:ml-auto md:order-2"><span class="text-white font-bold text-sm">11</span></div>
-                        <div class="w-full md:pr-8 md:order-1">
-                            <div class="bg-white p-6 rounded-lg shadow-lg">
-                                <h2 class="text-2xl font-bold mb-1">Day 11: Friday, August 15, 2025</h2>
-                                <h3 class="text-lg text-slate-600 font-medium mb-4">Home of the Blues</h3>
-                                <p class="text-slate-700 leading-relaxed">Drive three hours west to **Memphis**, a city whose gritty soul has produced some of the most influential music in the world. Settle in and then head straight for **Beale Street**, the heart of the blues scene, for an evening of live music and world-famous barbecue.</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Day 12 Content -->
-                <div id="day-12" class="day-section mb-12">
-                    <div class="flex md:grid md:grid-cols-2 items-start">
-                        <div class="flex-shrink-0 w-8 h-8 bg-slate-700 rounded-full flex items-center justify-center mr-4 md:mr-0 md:ml-auto md:order-2"><span class="text-white font-bold text-sm">12</span></div>
-                        <div class="w-full md:pr-8 md:order-1">
-                            <div class="bg-white p-6 rounded-lg shadow-lg">
-                                <h2 class="text-2xl font-bold mb-1">Day 12: Saturday, August 16, 2025</h2>
-                                <h3 class="text-lg text-slate-600 font-medium mb-4">The King and the Birth of Rock 'n' Roll</h3>
-                                <p class="text-slate-700 leading-relaxed">Make the pilgrimage to **Graceland**, the iconic home of Elvis Presley. Afterwards, visit **Sun Studio**, the legendary recording studio where Elvis, Johnny Cash, and Jerry Lee Lewis got their starts, and feel the history in the room where rock 'n' roll was born.</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Day 13 Content -->
-                <div id="day-13" class="day-section mb-12">
-                    <div class="flex md:grid md:grid-cols-2 items-start">
-                        <div class="flex-shrink-0 w-8 h-8 bg-slate-700 rounded-full flex items-center justify-center mr-4 md:mr-0 md:ml-auto md:order-2"><span class="text-white font-bold text-sm">13</span></div>
-                        <div class="w-full md:pr-8 md:order-1">
-                            <div class="bg-white p-6 rounded-lg shadow-lg">
-                                <h2 class="text-2xl font-bold mb-1">Day 13: Sunday, August 17, 2025</h2>
-                                <h3 class="text-lg text-slate-600 font-medium mb-4">Down to the Bayou</h3>
-                                <p class="text-slate-700 leading-relaxed">A long six-hour drive south through the Mississippi Delta brings you to your final destination: **New Orleans, Louisiana**. The change in culture, cuisine, and architecture is immediate and profound. Check into your hotel in the **French Quarter** and spend your first evening soaking in the unique, vibrant atmosphere of Bourbon Street.</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Day 14 Content -->
-                <div id="day-14" class="day-section mb-12">
-                    <div class="flex md:grid md:grid-cols-2 items-start">
-                        <div class="flex-shrink-0 w-8 h-8 bg-slate-700 rounded-full flex items-center justify-center mr-4 md:mr-0 md:ml-auto md:order-2"><span class="text-white font-bold text-sm">14</span></div>
-                        <div class="w-full md:pr-8 md:order-1">
-                            <div class="bg-white p-6 rounded-lg shadow-lg">
-                                <h2 class="text-2xl font-bold mb-1">Day 14: Monday, August 18, 2025</h2>
-                                <h3 class="text-lg text-slate-600 font-medium mb-4">The Big Easy</h3>
-                                <p class="text-slate-700 leading-relaxed">Spend your last full day exploring the best of New Orleans. Ride the historic St. Charles Streetcar through the stately **Garden District**, enjoy beignets and café au lait at Café Du Monde, and take an afternoon airboat tour through the nearby bayous to see alligators in their natural habitat. Enjoy a final farewell dinner of classic Creole cuisine.</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Day 15 Content -->
-                <div id="day-15" class="day-section mb-12">
-                    <div class="flex md:grid md:grid-cols-2 items-start">
-                        <div class="flex-shrink-0 w-8 h-8 bg-slate-700 rounded-full flex items-center justify-center mr-4 md:mr-0 md:ml-auto md:order-2"><span class="text-white font-bold text-sm">15</span></div>
-                        <div class="w-full md:pr-8 md:order-1">
-                            <div class="bg-white p-6 rounded-lg shadow-lg">
-                                <h2 class="text-2xl font-bold mb-1">Day 15: Tuesday, August 19, 2025</h2>
-                                <h3 class="text-lg text-slate-600 font-medium mb-4">Departure</h3>
-                                <p class="text-slate-700 leading-relaxed">After a final Southern breakfast, drive to Louis Armstrong New Orleans International Airport (MSY) to return your rental vehicle and catch your flight home, concluding your 15-day journey through the heart of the American South.</p>
-                            </div>
-                        </div>
-                    </div>
+    <main id="main-content" class="container mx-auto px-4 py-8">
+        
+        <div id="itinerary-view">
+            <div id="version-switcher" class="flex justify-center items-center space-x-2 mb-8">
+                <button data-version="A" class="version-btn text-xs sm:text-sm bg-slate-200 text-slate-700 font-semibold py-2 px-3 rounded-full active">Version A: High-Level Summary</button>
+                <button data-version="B" class="version-btn text-xs sm:text-sm bg-slate-200 text-slate-700 font-semibold py-2 px-3 rounded-full">Version B: In-Depth Guide</button>
+                <button data-version="C" class="version-btn text-xs sm:text-sm bg-slate-200 text-slate-700 font-semibold py-2 px-3 rounded-full">Version C: Comprehensive Dossier</button>
+            </div>
+            <div class="relative">
+                <div class="absolute left-4 -ml-px w-0.5 h-full bg-slate-300"></div>
+                <div id="itinerary-content">
+                    <!-- Itinerary content will be dynamically generated here by JS -->
                 </div>
             </div>
         </div>
+
+        <div id="map-view" class="hidden">
+            <div id="map"></div>
+        </div>
+
     </main>
 
     <script>
         document.addEventListener('DOMContentLoaded', () => {
-            const timelineNav = document.getElementById('timeline-nav');
-            const daySections = document.querySelectorAll('.day-section');
-            let columbiaChart, charlestonChart, savannahChart, atlantaChart;
+            // --- DATA STORE ---
+            const itineraryData = {
+                // Version A: High-Level Summary
+                A: [
+                    { day: 1, date: "Tuesday, August 5, 2025", title: "Arrival in Charleston & Drive to Columbia", itinerary: "<p class='text-slate-700 leading-relaxed'>Arrive at CHS, pick up the rental, see the World's Largest Fire Hydrant, and drive two hours inland to the state capital, Columbia.</p>" },
+                    { day: 2, date: "Wednesday, August 6, 2025", title: "Congaree's Giants & Columbia Memories", itinerary: "<p class='text-slate-700 leading-relaxed'>Visit the primeval forest of Congaree National Park in the morning, followed by a personal journey to childhood spots in Columbia before driving to Clayton, GA.</p>" },
+                    { day: 3, date: "Thursday, August 7, 2025", title: "A Great Gorge & A Giant Chicken", itinerary: "<p class='text-slate-700 leading-relaxed'>Experience the dramatic Tallulah Gorge, then see the iconic Big Chicken in Marietta on the way to Atlanta.</p>" },
+                    { day: 4, date: "Friday, August 8, 2025", title: "Atlanta: A Day of American History", itinerary: "<p class='text-slate-700 leading-relaxed'>Visit the Martin Luther King, Jr. National Historical Park and the Kennesaw Mountain Civil War battlefield.</p>" },
+                    { day: 5, date: "Saturday, August 9, 2025", title: "Atlanta: A Day for Family & Art", itinerary: "<p class='text-slate-700 leading-relaxed'>A day for a personal visit to family gravesites, followed by a tour of Atlanta's modern street art scene.</p>" },
+                    { day: 6, date: "Sunday, August 10, 2025", title: "Atlanta: Modern Attractions & Culture", itinerary: "<p class='text-slate-700 leading-relaxed'>Visit the Georgia Aquarium and World of Coca-Cola, then explore the vibrant Ponce City Market.</p>" },
+                    { day: 7, date: "Monday, August 11, 2025", title: "Ancient Mounds & a Drive to the Coast", itinerary: "<p class='text-slate-700 leading-relaxed'>Explore the ancient Ocmulgee Mounds before driving to the coastal serenity of Jekyll Island, GA.</p>" },
+                    { day: 8, date: "Tuesday, August 12, 2025", title: "Jekyll Island & Arrival in Savannah", itinerary: "<p class='text-slate-700 leading-relaxed'>Explore Driftwood Beach and the historic Jekyll Island Club before a short drive to Savannah.</p>" },
+                    { day: 9, date: "Wednesday, August 13, 2025", title: "A Full Day in Savannah", itinerary: "<p class='text-slate-700 leading-relaxed'>See the iconic Avenue of Oaks at Wormsloe, tour the historic squares, and choose between Bonaventure Cemetery or Tybee Island.</p>" },
+                    { day: 10, date: "Thursday, August 14, 2025", title: "Forts, a Hilton Head Drive-By & Beaufort", itinerary: "<p class='text-slate-700 leading-relaxed'>Visit the historic Fort Pulaski, take a quick drive through Hilton Head, and arrive in charming Beaufort, SC.</p>" },
+                    { day: 11, date: "Friday, August 15, 2025", title: "A Day in Beaufort", itinerary: "<p class='text-slate-700 leading-relaxed'>Explore Beaufort's historic district and Hollywood film locations, then visit the atmospheric Old Sheldon Church Ruins.</p>" },
+                    { day: 12, date: "Saturday, August 16, 2025", title: "The Boneyard Beach and Arrival in Charleston", itinerary: "<p class='text-slate-700 leading-relaxed'>Visit the unique 'boneyard beach' at Botany Bay Preserve before completing the drive to Charleston.</p>" },
+                    { day: 13, date: "Sunday, August 17, 2025", title: "Charleston: Maritime History & City Strolls", itinerary: "<p class='text-slate-700 leading-relaxed'>Take a ferry to Fort Sumter, then explore the historic City Market and Waterfront Park.</p>" },
+                    { day: 14, date: "Monday, August 18, 2025", title: "Charleston: Iconic Architecture & History", itinerary: "<p class='text-slate-700 leading-relaxed'>Take a carriage tour of the historic district and then choose between visiting Boone Hall Plantation or Patriots Point Naval Museum.</p>" },
+                    { day: 15, date: "Tuesday, August 19, 2025", title: "Departure", itinerary: "<p class='text-slate-700 leading-relaxed'>Enjoy a final Charleston breakfast before heading to Charleston International Airport (CHS) for your flight home.</p>" },
+                ],
+                // Version B: In-Depth Guide
+                B: [
+                    { day: 1, date: "Tuesday, August 5, 2025", title: "Arrival and Journey to the Capital", itinerary: "<h5>Overview:</h5><p>The journey begins! After arriving at Charleston's airport, you'll immediately pivot from the coastal Lowcountry to the state's heartland. This initial drive is a journey through South Carolina's distinct geographies, setting the stage for the historical and personal explorations to come.</p><h5>Afternoon (1:00 PM onwards): Arrival & Inland Drive</h5><p>Your 15-day exploration of the American South begins this afternoon upon your arrival at <strong>Charleston International Airport (CHS)</strong>. After securing your rental vehicle, your journey will commence not on the coast, but with an immediate two-hour drive on I-26 West to the state capital, <strong>Columbia</strong>.</p><h5>Late Afternoon: A Quirky Welcome</h5><p>Upon arrival in Columbia and after settling into your accommodations, you can get a brief, whimsical introduction to the city's public art. A quick stop at the corner of Marion and Taylor Streets reveals the <strong>World's Largest Fire Hydrant</strong>, a sculpture titled \"Busted Plug.\"</p><p><strong>Why It Stands Out:</strong> This is pure, quirky roadside America, a delightful break from the historical gravity of the region. At nearly 40 feet tall and weighing an astonishing 675,000 pounds, this tilted, gushing sculpture by local artist Blue Sky is a fun, unexpected landmark. It was designed to be proportionally massive enough for a 200-foot-tall dog and serves as a perfect, lighthearted photo op to officially mark the start of your travels. (Allow <strong>15-20 minutes</strong>).</p><div class='plan-visit'><h5>PLAN YOUR VISIT:</h5><ul class='list-disc list-inside'><li><strong>Sunrise/Sunset:</strong> ~6:33 AM / ~8:27 PM</li><li><strong>Hourly Weather:</strong> <a href='https://weather.com/weather/hourbyhour/l/29201:4:US' target='_blank' rel='noopener noreferrer' class='text-blue-600 hover:underline'>Columbia, SC Forecast</a></li></ul></div>" },
+                    { day: 2, date: "Wednesday, August 6, 2025", title: "Congaree's Giants & Columbia Memories", itinerary: "<h5>Overview:</h5><p>A day of two histories—the ancient, natural world of a primeval forest and your own personal past in the city of Columbia. You'll start among giant trees that have stood for centuries before taking a deeply personal walk down memory lane.</p><h5>Morning: Congaree National Park</h5><p>Get an early start to beat the August heat with a 30-minute drive to a primeval forest that feels a world away from the city.</p><p><strong>Why It Stands Out:</strong> This isn't just a walk in the woods; it's a visit to a \"land of giants.\" Congaree National Park protects the largest remaining tract of old-growth bottomland hardwood forest in North America, with some of the largest \"champion\" trees of their species on the continent.</p><div class='plan-visit'><h5>PLAN YOUR VISIT:</h5><ul class='list-disc list-inside'><li><strong>Sunrise/Sunset:</strong> ~6:38 AM / ~8:41 PM (Clayton, GA)</li><li><strong>Schedule:</strong> Park is open 24/7. Visitor Center typically open 9:00 AM - 5:00 PM.</li><li><strong>Time & Trails:</strong> Allow <strong>1.5 to 2 hours</strong>. The flat, accessible <strong>Boardwalk Loop Trail is 2.4 miles</strong> long.</li><li><strong>Fees & Reservations:</strong> There is <strong>no entrance fee</strong> and <strong>no reservations are required</strong>.</li><li><strong>Official Website:</strong> <a href='https://www.nps.gov/cong' target='_blank' rel='noopener noreferrer' class='text-blue-600 hover:underline'>www.nps.gov/cong</a></li><li><strong>Hourly Weather:</strong> <a href='https://weather.com/weather/hourbyhour/l/29061:4:US' target='_blank' rel='noopener noreferrer' class='text-blue-600 hover:underline'>Congaree National Park Forecast</a></li></ul></div><h5>Afternoon: A Return to Columbia</h5><p>Return to Columbia for your personal journey. This is your dedicated time to revisit the significant places of your childhood—your former home, your school—and to enjoy a nostalgic lunch. After lunch, begin the scenic, approximately 3-hour drive northeast to <strong>Clayton, GA</strong>, climbing into the foothills of the Blue Ridge Mountains.</p>" },
+                    { day: 3, date: "Thursday, August 7, 2025", title: "A Great Gorge & A Giant Chicken", itinerary: "<h5>Overview:</h5><p>From a spectacular natural wonder that captivated Victorian-era tourists to a quirky icon of the modern roadside, today is a day of impressive scale and delightful contrasts.</p><h5>Morning: Tallulah Gorge State Park</h5><p>Experience the breathtaking beauty of one of the most spectacular canyons in the eastern U.S.</p><p><strong>Why It Stands Out:</strong> This is a spectacular natural wonder with a history of daredevil stunts, including a tightrope walk by Karl Wallenda. The sheer depth of the gorge is impressive, and the optional hike down to the suspension bridge that sways 80 feet above the rushing river floor offers a genuine thrill.</p><div class='plan-visit'><h5>PLAN YOUR VISIT:</h5><ul class='list-disc list-inside'><li><strong>Sunrise/Sunset:</strong> ~6:54 AM / ~8:32 PM (Atlanta, GA)</li><li><strong>Schedule:</strong> Park grounds are open 8:00 AM to sunset.</li><li><strong>Time & Trails:</strong> Allow <strong>1.5 to 2 hours</strong> for the rim trail. The <strong>suspension bridge hike is a 1-mile round trip</strong> with over 1,000 stairs.</li><li><strong>Fees & Reservations:</strong> A <strong>$5 ParkPass</strong> per vehicle is required.</li><li><strong>Official Website:</strong> <a href='https://gastateparks.org/TallulahGorge' target='_blank' rel='noopener noreferrer' class='text-blue-600 hover:underline'>gastateparks.org/TallulahGorge</a></li><li><strong>Hourly Weather:</strong> <a href='https://weather.com/weather/hourbyhour/l/30573:4:US' target='_blank' rel='noopener noreferrer' class='text-blue-600 hover:underline'>Tallulah Gorge Forecast</a></li></ul></div><h5>Afternoon: Drive to Atlanta & Quirky Stop</h5><p>Drive approximately 1.5 hours south towards Atlanta, making a fun and memorable stop in Marietta to see <strong>The Big Chicken</strong>.</p><p><strong>Why It Stands Out:</strong> It's a 56-foot-tall steel chicken with a moving beak and rolling eyes, situated atop a KFC. This is a perfect example of classic, quirky mid-century roadside Americana. (Allow <strong>15-20 minutes</strong>). Continue the final 30-minute drive into Atlanta.</p>" },
+                    { day: 4, date: "Friday, August 8, 2025", title: "Atlanta: A Day of American History", itinerary: "<h5>Overview:</h5><p>Today is dedicated to two pivotal moments in American history, from the fight for Civil Rights that reshaped the nation to the battlefields of the Civil War that first tore it apart.</p><h5>Morning: Martin Luther King, Jr. National Historical Park</h5><p>Begin your day in the Sweet Auburn neighborhood, the cradle of the Civil Rights Movement.</p><p><strong>Why It Stands Out:</strong> This isn't just a museum; it's a living historical site. Walking in Dr. King's footsteps, hearing his voice in the historic Ebenezer Baptist Church, and seeing his birth home provides a powerful experience.</p><div class='plan-visit'><h5>PLAN YOUR VISIT:</h5><ul class='list-disc list-inside'><li><strong>Sunrise/Sunset:</strong> ~6:54 AM / ~8:31 PM</li><li><strong>Schedule:</strong> Visitor Center typically open 9:00 AM - 5:00 PM.</li><li><strong>Time:</strong> Allow <strong>2.5 to 3 hours</strong>.</li><li><strong>Fees & Reservations:</strong> All sites are <strong>free</strong>. The ranger-led tour of Dr. King's Birth Home is <strong>first-come, first-served on the day of your visit</strong>. Arrive early!</li><li><strong>Official Website:</strong> <a href='https://www.nps.gov/malu' target='_blank' rel='noopener noreferrer' class='text-blue-600 hover:underline'>www.nps.gov/malu</a></li><li><strong>Hourly Weather:</strong> <a href='https://weather.com/weather/hourbyhour/l/30303:4:US' target='_blank' rel='noopener noreferrer' class='text-blue-600 hover:underline'>Atlanta, GA Forecast</a></li></ul></div><h5>Afternoon: Kennesaw Mountain National Battlefield Park</h5><p>Travel about 30 minutes northwest of downtown Atlanta to a site of a major Civil War battle.</p><p><strong>Why It Stands Out:</strong> This is a real Civil War battlefield where you can still see the preserved earthworks. The view from the summit gives you a strategic, general's-eye perspective on the surrounding landscape, along with a stunning panoramic view of the modern Atlanta skyline.</p><div class='plan-visit'><h5>PLAN YOUR VISIT:</h5><ul class='list-disc list-inside'><li><strong>Schedule:</strong> Park grounds are open from dawn to dusk.</li><li><strong>Time:</strong> A drive to the top with a short walk takes about <strong>1 hour</strong>.</li><li><strong>Fees & Reservations:</strong> The park is <strong>free</strong> to enter.</li><li><strong>Official Website:</strong> <a href='https://www.nps.gov/kemo' target='_blank' rel='noopener noreferrer' class='text-blue-600 hover:underline'>www.nps.gov/kemo</a></li></ul></div>" },
+                    { day: 5, date: "Saturday, August 9, 2025", title: "Atlanta: A Day for Family & Art", itinerary: "<h5>Overview:</h5><p>A day centered on your personal family history, offering a quiet space for reflection, followed by an exploration of Atlanta's vibrant and modern public art scene.</p><h5>All Day: A Personal Visit</h5><p>This day is reserved for your personal visit to <strong>Uncle Henry's grave</strong>, with optional stops at <strong>Flat Rock Cemetery</strong>, a historic pioneer-era burial ground noted for its old, hand-carved headstones, and <strong>Hart Cemetery</strong>, another significant local historical site. This is a flexible day, allowing you the time and space needed for this important family pilgrimage.</p><h5>Late Afternoon: An \"Instagram-Worthy\" Art Tour</h5><p>After your personal visits, shift gears to experience the cool, modern side of Atlanta's culture.</p><p><strong>Why It Stands Out:</strong> The <strong>Krog Street Tunnel</strong> is a vibrant, ever-changing canvas of street art. Afterward, head to the <strong>Jackson Street Bridge</strong> for the single most iconic and sought-after photograph of the Atlanta skyline, a view made famous by the TV show *The Walking Dead*.</p><div class='plan-visit'><h5>PLAN YOUR VISIT:</h5><ul class='list-disc list-inside'><li><strong>Sunrise/Sunset:</strong> ~6:55 AM / ~8:30 PM</li><li><strong>Hourly Weather:</strong> <a href='https://weather.com/weather/hourbyhour/l/30303:4:US' target='_blank' rel='noopener noreferrer' class='text-blue-600 hover:underline'>Atlanta, GA Forecast</a></li></ul></div>" },
+                    { day: 6, date: "Sunday, August 10, 2025", title: "Atlanta: Modern Attractions & Culture", itinerary: "<h5>Overview:</h5><p>A day to experience the world-class attractions and modern culture that define contemporary Atlanta, centered around the legacy of the 1996 Olympic Games.</p><h5>Morning: Pemberton Place</h5><p>Head to Centennial Olympic Park, the heart of downtown Atlanta's tourist hub.</p><p><strong>Why It Stands Out:</strong> The <strong>Georgia Aquarium</strong> is one of the largest in the world and is home to <strong>whale sharks</strong>. The <strong>World of Coca-Cola</strong> offers a fascinating journey through the history of the world's most famous brand, culminating in a tasting room where you can sample over 100 different sodas from around the globe.</p><div class='plan-visit'><h5>PLAN YOUR VISIT:</h5><ul class='list-disc list-inside'><li><strong>Sunrise/Sunset:</strong> ~6:56 AM / ~8:29 PM</li><li><strong>Time:</strong> Allow <strong>2-2.5 hours</strong> for Coca-Cola and <strong>3-4 hours</strong> for the Aquarium.</li><li><strong>Fees & Reservations:</strong> Admission fees are required. <strong>Advance, timed-entry tickets are STRONGLY recommended</strong> as they can sell out.</li><li><strong>Official Websites:</strong> <a href='https://www.worldofcoca-cola.com' target='_blank' rel='noopener noreferrer' class='text-blue-600 hover:underline'>www.worldofcoca-cola.com</a> and <a href='https://www.georgiaaquarium.org' target='_blank' rel='noopener noreferrer' class='text-blue-600 hover:underline'>www.georgiaaquarium.org</a></li><li><strong>Hourly Weather:</strong> <a href='https://weather.com/weather/hourbyhour/l/30303:4:US' target='_blank' rel='noopener noreferrer' class='text-blue-600 hover:underline'>Atlanta, GA Forecast</a></li></ul></div><h5>Afternoon: Ponce City Market</h5><p>After your morning at the park, head to one of Atlanta's most popular modern destinations.</p><p><strong>Why It Stands Out:</strong> This isn't just a food court; it's a massive, historic Sears building transformed into a vibrant hub of food and shopping. Take the historic freight elevator to \"The Roof\" for vintage carnival games, mini-golf, and one of the best panoramic views of the city skyline.</p>" },
+                    { day: 7, date: "Monday, August 11, 2025", title: "Ancient Mounds & a Drive to the Coast", itinerary: "<h5>Overview:</h5><p>Today you leave the bustling city behind, traveling back thousands of years at a significant Native American historical site before continuing your journey southeast to the unique coastal environment of the Golden Isles.</p><h5>Morning: Ocmulgee Mounds National Historical Park</h5><p>Break up your drive with a stop in Macon, GA, about 1.5 hours south of Atlanta.</p><p><strong>Why It Stands Out:</strong> This is a chance to step into an ancient city. The park's most incredible feature is the reconstructed <strong>Earth Lodge</strong>, which contains its original, 1,000-year-old clay floor. You can actually walk inside a ceremonial chamber that's a millennium old.</p><div class='plan-visit'><h5>PLAN YOUR VISIT:</h5><ul class='list-disc list-inside'><li><strong>Sunrise/Sunset:</strong> ~6:35 AM / ~8:28 PM (Jekyll Island, GA)</li><li><strong>Time:</strong> Allow <strong>1.5 to 2 hours</strong>.</li><li><strong>Fees & Reservations:</strong> There is <strong>no entrance fee</strong>.</li><li><strong>Official Website:</strong> <a href='https://www.nps.gov/ocmu' target='_blank' rel='noopener noreferrer' class='text-blue-600 hover:underline'>www.nps.gov/ocmu</a></li><li><strong>Hourly Weather:</strong> <a href='https://weather.com/weather/hourbyhour/l/31201:4:US' target='_blank' rel='noopener noreferrer' class='text-blue-600 hover:underline'>Macon, GA Forecast</a></li></ul></div><h5>Afternoon (2:00 PM):</h5><p>Begin the approximately 3-hour drive to <strong>Jekyll Island, GA</strong>, arriving in the late afternoon.</p>" },
+                    { day: 8, date: "Tuesday, August 12, 2025", title: "Jekyll Island & Arrival in Savannah", itinerary: "<h5>Overview:</h5><p>A relaxing morning exploring the unique natural and historic treasures of Jekyll Island before a short drive to the equally historic city of Savannah.</p><h5>Morning: Exploring Jekyll Island</h5><p>Discover the two amazing stories of this barrier island.</p><p><strong>Why It Stands Out:</strong> The incredible <strong>Driftwood Beach</strong>, an otherworldly landscape of ancient, sun-bleached trees. And the Gilded Age history of the <strong>Jekyll Island Club</strong>, once the exclusive winter playground for the world's richest families.</p><div class='plan-visit'><h5>PLAN YOUR VISIT:</h5><ul class='list-disc list-inside'><li><strong>Sunrise/Sunset:</strong> ~6:47 AM / ~8:11 PM (Savannah, GA)</li><li><strong>Time:</strong> A <strong>3 to 4 hour</strong> visit is perfect. The <strong>Historic District Tram Tour</strong> is a comfortable, guided <strong>90-minute</strong> experience.</li><li><strong>Fees & Reservations:</strong> A <strong>daily vehicle entry fee</strong> (approx. $10) is required. <strong>Booking the tram tour in advance is highly recommended</strong>.</li><li><strong>Pro Tip:</strong> Visit <strong>Driftwood Beach</strong> at or near low tide.</li><li><strong>Official Website:</strong> <a href='https://www.jekyllisland.com' target='_blank' rel='noopener noreferrer' class='text-blue-600 hover:underline'>www.jekyllisland.com</a></li><li><strong>Hourly Weather:</strong> <a href='https://weather.com/weather/hourbyhour/l/31527:4:US' target='_blank' rel='noopener noreferrer' class='text-blue-600 hover:underline'>Jekyll Island, GA Forecast</a></li></ul></div><h5>Afternoon:</h5><p>Make the short, 1.5-hour drive north to <strong>Savannah</strong>, checking into your hotel.</p>" },
+                    { day: 9, date: "Wednesday, August 13, 2025", title: "A Full Day in Savannah", itinerary: "<h5>Overview:</h5><p>A deep dive into one of America's most beautiful cities, from its grand oak avenues to its historic core and your choice of afternoon adventures.</p><h5>Morning (9:00 AM - 11:30 AM): The Avenue of Oaks</h5><p>Start your day at <strong>Wormsloe State Historic Site</strong>.</p><p><strong>Why It Stands Out:</strong> The breathtaking 1.5-mile avenue of over 400 live oaks forms a spectacular natural tunnel draped in Spanish moss, one of the most photographed spots in the South.</p><h5>Midday (12:00 PM - 3:00 PM): Exploring the Historic District</h5><p>A <strong>hop-on, hop-off trolley tour</strong> is the best way to see the city's 22 historic squares comfortably. Hop off at <strong>City Market</strong> for lunch.</p><h5>Late Afternoon (3:00 PM onwards): Choose Your Savannah Experience</h5><p><strong>Option 1: Bonaventure Cemetery</strong>. Famous for its haunting beauty.<br><strong>Option 2: Tybee Island</strong>. A casual beach town with a historic lighthouse.</p><div class='plan-visit'><h5>PLAN YOUR VISIT:</h5><ul class='list-disc list-inside'><li><strong>Sunrise/Sunset:</strong> ~6:47 AM / ~8:10 PM</li><li><strong>Hourly Weather:</strong> <a href='https://weather.com/weather/hourbyhour/l/31401:4:US' target='_blank' rel='noopener noreferrer' class='text-blue-600 hover:underline'>Savannah, GA Forecast</a></li></ul></div>" },
+                    { day: 10, date: "Thursday, August 14, 2025", title: "Forts, a Hilton Head Drive-By & Beaufort", itinerary: "<h5>Overview:</h5><p>A day of military history, a glimpse of modern resort life, and your arrival in the charming 'Queen of the Sea Islands,' Beaufort.</p><h5>Morning: Fort Pulaski National Monument</h5><p>As you leave Savannah, stop at this major Civil War landmark.</p><p><strong>Why It Stands Out:</strong> <strong>Fort Pulaski</strong>, considered invincible, was defeated in just 30 hours by the Union's new rifled cannons, proving masonry forts were obsolete and changing military history forever.</p><div class='plan-visit'><h5>PLAN YOUR VISIT:</h5><ul class='list-disc list-inside'><li><strong>Sunrise/Sunset:</strong> ~6:32 AM / ~8:25 PM (Beaufort, SC)</li><li><strong>Time:</strong> Allow <strong>1.5 to 2 hours</strong>.</li><li><strong>Fees & Reservations:</strong> An <strong>entrance fee</strong> is required.</li><li><strong>Official Website:</strong> <a href='https://www.nps.gov/fopu' target='_blank' rel='noopener noreferrer' class='text-blue-600 hover:underline'>www.nps.gov/fopu</a></li></ul></div><h5>Afternoon:</h5><p>Take your brief \"drive-by\" of <strong>Hilton Head Island</strong>. Key stops are <strong>Harbour Town</strong> and <strong>Coligny Beach Park</strong>.</p><h5>Evening:</h5><p>Arrive in <strong>Beaufort</strong>, check into your inn or hotel.</p>" },
+                    { day: 11, date: "Friday, August 15, 2025", title: "A Day in Beaufort", itinerary: "<h5>Overview:</h5><p>A relaxing day soaking in the history, Hollywood connections, and waterfront charm of Beaufort.</p><h5>Morning: Exploring Beaufort</h5><p><strong>Why It Stands Out:</strong> Beaufort is the real-life movie set for \"Greenbow, Alabama\" in *Forrest Gump*. You can walk along <strong>Henry C. Chambers Waterfront Park</strong> and see the bridge Forrest runs across. The <strong>Tidalholm Mansion</strong> was the main set for *The Big Chill*.</p><div class='plan-visit'><h5>PLAN YOUR VISIT:</h5><ul class='list-disc list-inside'><li><strong>Sunrise/Sunset:</strong> ~6:33 AM / ~8:24 PM</li><li><strong>Hourly Weather:</strong> <a href='https://weather.com/weather/hourbyhour/l/29902:4:US' target='_blank' rel='noopener noreferrer' class='text-blue-600 hover:underline'>Beaufort, SC Forecast</a></li></ul></div><h5>Afternoon: The Old Sheldon Church Ruins</h5><p>Take a 30-minute drive inland to a truly magical spot.</p><p><strong>Why It Stands Out:</strong> The majestic brick ruins of this colonial church, standing serenely among giant oaks, are incredibly atmospheric and peaceful.</p>" },
+                    { day: 12, date: "Saturday, August 16, 2025", title: "The Boneyard Beach and Arrival in Charleston", itinerary: "<h5>Overview:</h5><p>Your final travel day takes you to one of the most unique and wild beaches on the Atlantic coast before arriving in Charleston.</p><h5>Morning: Botany Bay</h5><p>Visit Botany Bay Plantation Heritage Preserve on Edisto Island to see the 'boneyard beach' at low tide (check tide charts!).</p><p><strong>Why It Stands Out:</strong> This is a wild, undeveloped coastline. Its main attraction is the \"boneyard beach,\" a stunning example of coastal erosion. The strict \"leave everything as you find it\" policy maintains its pristine beauty.</p><div class='plan-visit'><h5>PLAN YOUR VISIT:</h5><ul class='list-disc list-inside'><li><strong>Sunrise/Sunset:</strong> ~6:44 AM / ~8:03 PM (Charleston, SC)</li><li><strong>Schedule: IMPORTANT: CLOSED on Tuesdays.</strong></li><li><strong>Time:</strong> Allow <strong>1.5 to 2 hours</strong>.</li><li><strong>Fees & Reservations: Free</strong> to enter.</li><li><strong>Pro Tip:</strong> Visiting at <strong>LOW TIDE is ESSENTIAL</strong>.</li><li><strong>Official Website:</strong> <a href='https://www2.dnr.sc.gov/ManagedLands/ManagedLand/ManagedLand/57' target='_blank' rel='noopener noreferrer' class='text-blue-600 hover:underline'>www2.dnr.sc.gov</a></li></ul><h5 class='mt-4'>Edisto Beach Low Tide Times (Approx.)</h5><table class='comparison-table'><thead><tr><th>Date</th><th>Low Tide Times</th></tr></thead><tbody><tr><td>Thurs, Aug 14</td><td>~9:30 AM & ~10:00 PM</td></tr><tr><td>Fri, Aug 15</td><td>~10:20 AM & ~10:50 PM</td></tr><tr><td><strong>Sat, Aug 16</strong></td><td><strong>~11:15 AM & ~11:45 PM</strong></td></tr><tr><td>Sun, Aug 17</td><td>~12:10 PM</td></tr><tr><td>Mon, Aug 18</td><td>~1:05 PM & ~1:30 AM</td></tr></tbody></table></div><h5>Afternoon:</h5><p>Complete the final 1-hour drive to <strong>Charleston</strong> and check into your hotel.</p>" },
+                    { day: 13, date: "Sunday, August 17, 2025", title: "Charleston: Maritime History & City Strolls", itinerary: "<h5>Overview:</h5><p>Your first full day in Charleston is a journey on the water to see where the Civil War began, followed by an exploration of the city's lively historic market and beautiful public waterfront.</p><h5>Morning: Fort Sumter National Monument</h5><p><strong>Why It Stands Out:</strong> This is literally where the Civil War started. The tour takes you out to the fort in the middle of Charleston Harbor, providing a tangible connection to a pivotal moment in American history.</p><div class='plan-visit'><h5>PLAN YOUR VISIT:</h5><p>The entire tour takes <strong>2 hours and 15 minutes</strong>. **Advance reservations are STRONGLY recommended**. Website: <a href='https://www.fortsumtertours.com' target='_blank' rel='noopener noreferrer' class='text-blue-600 hover:underline'>www.fortsumtertours.com</a></p></div><h5>Afternoon:</h5><p>After the tour, explore the historic <strong>City Market</strong> (allow <strong>1 to 1.5 hours</strong>). Afterward, take a gentle stroll through <strong>Waterfront Park</strong> to see the famous <strong>Pineapple Fountain</strong>.</p><div class='plan-visit'><h5>PLAN YOUR VISIT:</h5><ul class='list-disc list-inside'><li><strong>Sunrise/Sunset:</strong> ~6:44 AM / ~8:02 PM</li><li><strong>Hourly Weather:</strong> <a href='https://weather.com/weather/hourbyhour/l/29401:4:US' target='_blank' rel='noopener noreferrer' class='text-blue-600 hover:underline'>Charleston, SC Forecast</a></li></ul></div>" },
+                    { day: 14, date: "Monday, August 18, 2025", title: "Charleston: Iconic Architecture & History", itinerary: "<h5>Overview:</h5><p>Your final full day is dedicated to the images that define Charleston: its grand homes, colorful streets, and your choice of a deep-dive into the region's history.</p><h5>Morning:</h5><p>A <strong>horse-drawn carriage tour</strong> (typically <strong>1 hour</strong>) is a wonderful option to see landmarks like <strong>The Battery</strong> and <strong>Rainbow Row</strong>.</p><h5>Afternoon: Choose Your Adventure</h5><p><strong>Option 1 (Plantation Life):** Visit <strong>Boone Hall Plantation</strong>. Famous for its Avenue of Oaks and powerful presentations on Gullah culture.<br><strong>Option 2 (Naval History):** Explore <strong>Patriots Point Naval & Maritime Museum</strong>. Walk the flight deck of the WWII aircraft carrier USS Yorktown.</p><div class='plan-visit'><h5>PLAN YOUR VISIT:</h5><ul class='list-disc list-inside'><li><strong>Sunrise/Sunset:</strong> ~6:45 AM / ~8:01 PM</li></ul></div>" },
+                    { day: 15, date: "Tuesday, August 19, 2025", title: "Departure", itinerary: "<h5>Overview:</h5><p>A final Southern breakfast and one last stroll before your journey home.</p><h5>Morning:</h5><p>Enjoy a final Lowcountry breakfast. If time allows, take one last walk through the historic district or do some last-minute souvenir shopping at the City Market before heading to the Charleston airport for your departure.</p><div class='plan-visit'><h5>PLAN YOUR VISIT:</h5><ul class='list-disc list-inside'><li><strong>Sunrise/Sunset:</strong> ~6:46 AM / ~8:00 PM</li></ul></div>" },
+                ],
+                // Version C: Comprehensive Dossier
+                C: [
+                    { day: 1, date: "Tuesday, August 5, 2025", title: "Arrival and Journey to the Capital", itinerary: "<h5>Afternoon (1:00 PM onwards): Arrival & Inland Drive</h5><p>Your 15-day exploration of the American South begins this afternoon upon your arrival at <strong>Charleston International Airport (CHS)</strong>. After securing your rental vehicle, your journey will commence not on the coast, but with an immediate two-hour drive on I-26 West to the state capital, <strong>Columbia</strong>. This initial leg of the trip takes you from the low-lying, humid coastal plain into the rolling, clay-soiled hills of the state's interior—a transition that defines the state's geography and history. You will be traveling along the historic path of settlement, moving from the old colonial power center to the city that was created to represent a new, unified state.</p><h5>Late Afternoon: A Quirky Welcome</h5><p>Upon arrival in Columbia and after settling into your accommodations, you can get a brief, whimsical introduction to the city's public art. A quick stop at the corner of Marion and Taylor Streets reveals the <strong>World's Largest Fire Hydrant</strong>, a sculpture titled \"Busted Plug.\"</p><p><strong>Why It Stands Out:</strong> This is pure, quirky roadside America, a delightful break from the historical gravity of the region. At nearly 40 feet tall and weighing an astonishing 675,000 pounds, this tilted, gushing sculpture by local artist Blue Sky is a fun, unexpected landmark. It was designed to be proportionally massive enough for a 200-foot-tall dog and serves as a perfect, lighthearted photo op to officially mark the start of your travels. It’s a testament to the city's embrace of unique and accessible art. (Allow <strong>15-20 minutes</strong>).</p>", dossier: "columbia" },
+                    { day: 2, date: "Wednesday, August 6, 2025", title: "Congaree's Giants & Columbia Memories", itinerary: "<h5>Overview:</h5><p>A day of two histories—the ancient, natural world of a primeval forest and your own personal past in the city of Columbia. You'll start among giant trees that have stood for centuries before taking a deeply personal walk down memory lane.</p><h5>Morning: Congaree National Park</h5><p>Get an early start to beat the August heat with a 30-minute drive to a primeval forest that feels a world away from the city.</p><p><strong>Why It Stands Out:</strong> This isn't just a walk in the woods; it's a visit to a \"land of giants.\" Congaree National Park protects the largest remaining tract of old-growth bottomland hardwood forest in North America. Here, you'll find one of the tallest temperate deciduous forest canopies in the world, with some of the largest \"champion\" trees of their species on the continent. The scale of the forest, with its towering Loblolly Pines, ancient Bald Cypresses, and massive oaks, is truly awesome and humbling.</p><h5>Afternoon: A Return to Columbia</h5><p>Return to Columbia for your personal journey. This is your dedicated time to revisit the significant places of your childhood—your former home, your school—and to enjoy a nostalgic lunch. After lunch, begin the scenic, approximately 3-hour drive northeast to <strong>Clayton, GA</strong>, climbing into the foothills of the Blue Ridge Mountains.</p>", dossier: "congaree" },
+                    { day: 3, date: "Thursday, August 7, 2025", title: "A Great Gorge & A Giant Chicken", itinerary: "<h5>Overview:</h5><p>From a spectacular natural wonder that captivated Victorian-era tourists to a quirky icon of the modern roadside, today is a day of impressive scale and delightful contrasts.</p><h5>Morning: Tallulah Gorge State Park</h5><p>Experience the breathtaking beauty of one of the most spectacular canyons in the eastern U.S. Your parents can enjoy the stunning views from the accessible rim trail overlooks, which provide dramatic vistas into the nearly 1,000-foot-deep gorge.</p><p><strong>Why It Stands Out:</strong> This is a spectacular natural wonder with a history of daredevil stunts, including a tightrope walk by Karl Wallenda. The sheer depth of the gorge is impressive, and the optional hike down to the suspension bridge that sways 80 feet above the rushing river floor offers a genuine thrill and an incredible photo opportunity for the more adventurous members of your group.</p><h5>Afternoon: Drive to Atlanta & Quirky Stop</h5><p>Drive approximately 1.5 hours south towards Atlanta, making a fun and memorable stop in Marietta to see <strong>The Big Chicken</strong>.</p><p><strong>Why It Stands Out:</strong> It's a 56-foot-tall steel chicken with a moving beak and rolling eyes, situated atop a KFC. This is a perfect example of classic, quirky mid-century roadside Americana that makes a road trip unforgettable. Built in 1963 for a local restaurant, it was saved from demolition by public outcry and remains a beloved local icon and navigational landmark. (Allow <strong>15-20 minutes</strong>). Continue the final 30-minute drive into Atlanta.</p>", dossier: "tallulah" },
+                    { day: 4, date: "Friday, August 8, 2025", title: "Atlanta: A Day of American History", itinerary: "<h5>Overview:</h5><p>Today is dedicated to two pivotal moments in American history, from the fight for Civil Rights that reshaped the nation to the battlefields of the Civil War that first tore it apart.</p><h5>Morning: Martin Luther King, Jr. National Historical Park</h5><p>Begin your day in the Sweet Auburn neighborhood, the cradle of the Civil Rights Movement.</p><p><strong>Why It Stands Out:</strong> This isn't just a museum; it's a living historical site. It is the real place where a man who changed the world was born, lived, preached, and is now laid to rest. Walking in Dr. King's footsteps, hearing his voice in the historic Ebenezer Baptist Church, and seeing his birth home provides a powerful experience.</p><h5>Afternoon: Kennesaw Mountain National Battlefield Park</h5><p>Travel about 30 minutes northwest of downtown Atlanta to a site of a major Civil War battle.</p><p><strong>Why It Stands Out:</strong> This is a real Civil War battlefield where you can still see the preserved earthworks. The view from the summit gives you a strategic, general's-eye perspective on the surrounding landscape, along with a stunning panoramic view of the modern Atlanta skyline.</p>", dossier: "atlanta" },
+                    { day: 5, date: "Saturday, August 9, 2025", title: "Atlanta: A Day for Family & Art", itinerary: "<h5>All Day: A Personal Visit</h5><p>This day is reserved for your personal visit to <strong>Uncle Henry's grave</strong>, with optional stops at <strong>Flat Rock Cemetery</strong>, a historic pioneer-era burial ground noted for its old, hand-carved headstones, and <strong>Hart Cemetery</strong>, another significant local historical site. This is a flexible day, allowing you the time and space needed for this important family pilgrimage.</p><h5>Late Afternoon: An \"Instagram-Worthy\" Art Tour</h5><p>After your personal visits, shift gears to experience the cool, modern side of Atlanta's culture.</p><p><strong>Why It Stands Out:</strong> The <strong>Krog Street Tunnel</strong> is a vibrant, ever-changing canvas of street art. Afterward, head to the <strong>Jackson Street Bridge</strong> for the single most iconic and sought-after photograph of the Atlanta skyline, a view made famous by the TV show *The Walking Dead*.</p>" },
+                    { day: 6, date: "Sunday, August 10, 2025", title: "Atlanta: Modern Attractions & Culture", itinerary: "<h5>Overview:</h5><p>A day to experience the world-class attractions and modern culture that define contemporary Atlanta, centered around the legacy of the 1996 Olympic Games.</p><h5>Morning: Pemberton Place</h5><p>Head to Centennial Olympic Park, the heart of downtown Atlanta's tourist hub.</p><p><strong>Why It Stands Out:</strong> The <strong>Georgia Aquarium</strong> is one of the largest in the world and is home to <strong>whale sharks</strong>. The <strong>World of Coca-Cola</strong> offers a fascinating journey through the history of the world's most famous brand, culminating in a tasting room where you can sample over 100 different sodas from around the globe.</p><h5>Afternoon: Ponce City Market</h5><p>After your morning at the park, head to one of Atlanta's most popular modern destinations.</p><p><strong>Why It Stands Out:</strong> This isn't just a food court; it's a massive, historic Sears building transformed into a vibrant hub of food and shopping. Take the historic freight elevator to \"The Roof\" for vintage carnival games, mini-golf, and one of the best panoramic views of the city skyline.</p>" },
+                    { day: 7, date: "Monday, August 11, 2025", title: "Ancient Mounds & a Drive to the Coast", itinerary: "<h5>Overview:</h5><p>Today you leave the bustling city behind, traveling back thousands of years at a significant Native American historical site before continuing your journey southeast to the unique coastal environment of the Golden Isles.</p><h5>Morning: Ocmulgee Mounds National Historical Park</h5><p>Break up your drive with a stop in Macon, GA, about 1.5 hours south of Atlanta.</p><p><strong>Why It Stands Out:</strong> This is a chance to step into an ancient city. The park's most incredible feature is the reconstructed <strong>Earth Lodge</strong>, which contains its original, 1,000-year-old clay floor. You can actually walk inside a ceremonial chamber that's a millennium old.</p><h5>Afternoon (2:00 PM):</h5><p>Begin the approximately 3-hour drive to <strong>Jekyll Island, GA</strong>, arriving in the late afternoon.</p>" },
+                    { day: 8, date: "Tuesday, August 12, 2025", title: "Jekyll Island & Arrival in Savannah", itinerary: "<h5>Overview:</h5><p>A relaxing morning exploring the unique natural and historic treasures of Jekyll Island before a short drive to the equally historic city of Savannah.</p><h5>Morning: Exploring Jekyll Island</h5><p>Discover the two amazing stories of this barrier island.</p><p><strong>Why It Stands Out:</strong> The incredible <strong>Driftwood Beach</strong>, an otherworldly landscape of ancient, sun-bleached trees. And the Gilded Age history of the <strong>Jekyll Island Club</strong>, once the exclusive winter playground for the world's richest families.</p><h5>Afternoon:</h5><p>Make the short, 1.5-hour drive north to <strong>Savannah</strong>, checking into your hotel.</p>", dossier: "jekyll" },
+                    { day: 9, date: "Wednesday, August 13, 2025", title: "A Full Day in Savannah", itinerary: "<h5>Overview:</h5><p>A deep dive into one of America's most beautiful cities, from its grand oak avenues to its historic core and your choice of afternoon adventures.</p><h5>Morning (9:00 AM - 11:30 AM): The Avenue of Oaks</h5><p>Start your day at <strong>Wormsloe State Historic Site</strong>.</p><p><strong>Why It Stands Out:</strong> The breathtaking 1.5-mile avenue of over 400 live oaks forms a spectacular natural tunnel draped in Spanish moss, one of the most photographed spots in the South.</p><h5>Midday (12:00 PM - 3:00 PM): Exploring the Historic District</h5><p>A <strong>hop-on, hop-off trolley tour</strong> is the best way to see the city's 22 historic squares comfortably. Hop off at <strong>City Market</strong> for lunch.</p><h5>Late Afternoon (3:00 PM onwards): Choose Your Savannah Experience</h5><p><strong>Option 1: Bonaventure Cemetery</strong>. Famous for its haunting beauty.<br><strong>Option 2: Tybee Island</strong>. A casual beach town with a historic lighthouse.</p>", dossier: "savannah" },
+                    { day: 10, date: "Thursday, August 14, 2025", title: "Forts, a Hilton Head Drive-By & Beaufort", itinerary: "<h5>Overview:</h5><p>A day of military history, a glimpse of modern resort life, and your arrival in the charming 'Queen of the Sea Islands,' Beaufort.</p><h5>Morning: Fort Pulaski National Monument</h5><p>As you leave Savannah, stop at this major Civil War landmark.</p><p><strong>Why It Stands Out:</strong> <strong>Fort Pulaski</strong>, considered invincible, was defeated in just 30 hours by the Union's new rifled cannons, proving masonry forts were obsolete and changing military history forever.</p><h5>Afternoon:</h5><p>Take your brief \"drive-by\" of <strong>Hilton Head Island</strong>. Key stops are <strong>Harbour Town</strong> and <strong>Coligny Beach Park</strong>.</p><h5>Evening:</h5><p>Arrive in <strong>Beaufort</strong>, check into your inn or hotel.</p>" },
+                    { day: 11, date: "Friday, August 15, 2025", title: "A Day in Beaufort", itinerary: "<h5>Overview:</h5><p>A relaxing day soaking in the history, Hollywood connections, and waterfront charm of Beaufort.</p><h5>Morning: Exploring Beaufort</h5><p><strong>Why It Stands Out:</strong> Beaufort is the real-life movie set for \"Greenbow, Alabama\" in *Forrest Gump*. You can walk along <strong>Henry C. Chambers Waterfront Park</strong> and see the bridge Forrest runs across. The <strong>Tidalholm Mansion</strong> was the main set for *The Big Chill*.</p><h5>Afternoon: The Old Sheldon Church Ruins</h5><p>Take a 30-minute drive inland to a truly magical spot.</p><p><strong>Why It Stands Out:</strong> The majestic brick ruins of this colonial church, standing serenely among giant oaks, are incredibly atmospheric and peaceful.</p>", dossier: "beaufort" },
+                    { day: 12, date: "Saturday, August 16, 2025", title: "The Boneyard Beach and Arrival in Charleston", itinerary: "<h5>Overview:</h5><p>Your final travel day takes you to one of the most unique and wild beaches on the Atlantic coast before arriving in Charleston.</p><h5>Morning: Botany Bay</h5><p>Visit Botany Bay Plantation Heritage Preserve on Edisto Island to see the 'boneyard beach' at low tide (check tide charts!).</p><p><strong>Why It Stands Out:</strong> This is a wild, undeveloped coastline. Its main attraction is the \"boneyard beach,\" a stunning example of coastal erosion. The strict \"leave everything as you find it\" policy maintains its pristine beauty.</p><h5>Afternoon:</h5><p>Complete the final 1-hour drive to <strong>Charleston</strong> and check into your hotel.</p>", dossier: "boneyard" },
+                    { day: 13, date: "Sunday, August 17, 2025", title: "Charleston: Maritime History & City Strolls", itinerary: "<h5>Overview:</h5><p>Your first full day in Charleston is a journey on the water to see where the Civil War began, followed by an exploration of the city's lively historic market and beautiful public waterfront.</p><h5>Morning: Fort Sumter National Monument</h5><p><strong>Why It Stands Out:</strong> This is literally where the Civil War started. The tour takes you out to the fort in the middle of Charleston Harbor, providing a tangible connection to a pivotal moment in American history.</p><h5>Afternoon:</h5><p>After the tour, explore the historic <strong>City Market</strong> (allow <strong>1 to 1.5 hours</strong>). Afterward, take a gentle stroll through <strong>Waterfront Park</strong> to see the famous <strong>Pineapple Fountain</strong>.</p>" },
+                    { day: 14, date: "Monday, August 18, 2025", title: "Charleston: Iconic Architecture & History", itinerary: "<h5>Overview:</h5><p>Your final full day is dedicated to the images that define Charleston: its grand homes, colorful streets, and your choice of a deep-dive into the region's history.</p><h5>Morning:</h5><p>A <strong>horse-drawn carriage tour</strong> (typically <strong>1 hour</strong>) is a wonderful option to see landmarks like <strong>The Battery</strong> and <strong>Rainbow Row</strong>.</p><h5>Afternoon: Choose Your Adventure</h5><p><strong>Option 1 (Plantation Life):** Visit <strong>Boone Hall Plantation</strong>. Famous for its Avenue of Oaks and powerful presentations on Gullah culture.<br><strong>Option 2 (Naval History):** Explore <strong>Patriots Point Naval & Maritime Museum</strong>. Walk the flight deck of the WWII aircraft carrier USS Yorktown.</p>" },
+                    { day: 15, date: "Tuesday, August 19, 2025", title: "Departure", itinerary: "<h5>Overview:</h5><p>A final Southern breakfast and one last stroll before your journey home.</p><h5>Morning:</h5><p>Enjoy a final Lowcountry breakfast. If time allows, take one last walk through the historic district or do some last-minute souvenir shopping at the City Market before heading to the Charleston airport for your departure.</p>" },
+                ]
+            };
+
+            const dossierData = {
+                columbia: {
+                    title: "Columbia, South Carolina",
+                    content: `<h4>Overview & Geography:</h4><p>The capital of South Carolina, Columbia is strategically situated in the state's geographic center on the <strong>Atlantic Seaboard Fall Line</strong>. This is a significant geological boundary where the hilly, clay-soiled Piedmont region descends to the flat, sandy Coastal Plain. This location is defined by the confluence of the Saluda and Broad rivers, which merge here to form the Congaree River. The rapids and waterfalls created by the Fall Line historically provided power for the city's early mills, making its location as much about industry as it was about politics.</p><h4>Distinguishing Skyline Features:</h4><p>Columbia's skyline is a modest but clear representation of its identity as a center for government and commerce.</p><ul><li><strong>South Carolina State House:</strong> The most historic and prominent landmark. Its wide, classical structure and <strong>180-foot</strong> copper dome are the heart of the city's profile. Built in the Greek Revival style, construction began in 1855 and continued for over 50 years, using blue granite quarried from the state itself.</li><li><strong>Bank of America Plaza:</strong> At <strong>388 feet</strong>, this 26-story tower is the tallest building in the city. Completed in 1989, its distinctive dark glass and stepped-back design represent the modern commercial growth of Columbia.</li></ul><h4>Etymology & Nicknames:</h4><p>Named in a 1786 legislative session for <strong>Christopher Columbus</strong>, representing a poetic, New World identity. Common nicknames include "The Capital of Southern Hospitality" and, more recently, "The Cola."</p><h4>Founding & Key Historical Events:</h4><p>Founded in 1786 as a planned city to be the new state capital. Much of the city was destroyed by fire during its occupation by Union forces in 1865. In 1917, Fort Jackson was established, now the U.S. Army's largest training installation.</p><h4>Economic & Demographic Profile:</h4><p>Population: ~139,000 | Metro Area: ~845,000. Major Industries: State Government, Education (University of South Carolina), Healthcare, Military.</p><h4>Culture, Cuisine & Architecture:</h4><p>Classic Southern comfort food is prevalent, with pimento cheese being a local staple. The Tunnelvision mural on Marion Street is a famous piece of public art.</p><h4>Government & Civic Structure:</h4><p>Columbia operates under a Council-Manager form of government.</p><h4>Notable People & Trivia:</h4><p>Small bronze stars on the west side of the State House mark where Union cannonballs struck the building in 1865.</p><h4>Chinatown:</h4><p>Unlike many major American cities, Columbia does not have a historically designated "Chinatown." While the city has a diverse and growing Asian-American population with numerous markets and restaurants scattered throughout the area, there was never a large, concentrated wave of Chinese immigration that established a distinct ethnic enclave.</p>`
+                },
+                congaree: {
+                    title: "Congaree National Park",
+                    content: `<h4>Overview & Significance:</h4><p>Congaree is not just a park; it's a sanctuary for biodiversity and a glimpse into the primeval past of the American South. It protects the largest remaining tract of old-growth bottomland hardwood forest in North America. This type of ecosystem once covered millions of acres but has now largely vanished.</p><h4>Ecology, Flora & Fauna:</h4><p>The park is a sanctuary for giant trees. Its old-growth forest contains one of the tallest temperate deciduous forest canopies in the world. Key species include colossal Loblolly Pines, towering Bald Cypress (identifiable by their flared trunks and \"knees\" that protrude from the water), and Water Tupelo. The park is an Important Bird Area, home to Barred Owls, Pileated Woodpeckers, and colorful Prothonotary Warblers.</p><h4>Creation & Purpose:</h4><p>Protected as a National Monument in 1976 and re-designated as a National Park in 2003 after a grassroots campaign in the 1960s saved the ancient forest from logging.</p><h4>Notable Metrics & Characteristics:</h4><p>The park covers 26,692 acres. The forest canopy averages over 100 feet in height, with some \"champion\" trees exceeding 167 feet. The main Boardwalk Loop Trail is 2.4 miles long.</p><h4>Trivia:</h4><p>This is not a swamp, but a dynamic river floodplain forest. It is a UNESCO Biosphere Reserve.</p>`
+                },
+                tallulah: {
+                    title: "Tallulah Gorge State Park",
+                    content: `<h4>Overview & Geology:</h4><p>A dramatic, rocky gorge carved by the Tallulah River through the Tallulah Dome rock formation. The rock walls are primarily Precambrian quartzite and granite gneiss, extremely hard metamorphic rocks that have resisted erosion and allowed the gorge to maintain its steep walls.</p><h4>Ecology, Flora & Fauna:</h4><p>The gorge's unique microclimates support unusual flora, including the very rare Persistent Trillium. The cliffs are a nesting site for reintroduced Peregrine Falcons.</p><h4>Creation & Purpose:</h4><p>The park was established in 1993 through a partnership between Georgia Power, which had operated a hydroelectric dam here since 1913, and the state.</p><h4>Cost:</h4><p>The original dam construction cost approximately $1 million in 1913.</p><h4>Notable Metrics & Characteristics:</h4><p>The park covers 2,689 acres. The gorge is 2 miles long and nearly 1,000 feet deep. The suspension bridge sways 80 feet above the gorge floor.</p><h4>Trivia:</h4><p>Before the dam, it was a major Victorian tourist attraction known as the "Niagara of the South." In 1970, Karl Wallenda successfully walked a high-wire across the gorge.</p>`
+                },
+                atlanta: {
+                    title: "Atlanta, Georgia",
+                    content: `<h4>Overview & Geography:</h4><p>The capital of Georgia, Atlanta is a major metropolitan hub situated in the hilly, forested southern foothills of the Appalachian Mountains. It sits astride the Eastern Continental Divide; rain on one side flows to the Atlantic, while rain on the other flows to the Gulf of Mexico.</p><h4>Distinguishing Skyline Features:</h4><p>Atlanta boasts one of the most extensive skylines in the U.S. Key features include the <strong>Bank of America Plaza</strong>, at <strong>1,023 feet</strong> the city's tallest building, topped by a gold-leaf spire, and the cylindrical, <strong>723-foot</strong> Westin Peachtree Plaza.</p><h4>Etymology & Nicknames:</h4><p>The name "Atlanta" is a feminized version of "Atlantic," from the railroad. Nicknames include "The Gate City," "The Phoenix City," and "Y'allywood" for its film industry.</p><h4>Founding & Key Historical Events:</h4><p>Founded 1837 as "Terminus." Destroyed in 1864 during the Civil War. Hosted the 1996 Centennial Olympic Games.</p><h4>Economic & Demographic Profile:</h4><p>Population: ~500,000 | Metro Area: ~6.2 Million. Major Industries: Logistics, Corporate HQs (The Coca-Cola Company, Delta Air Lines, UPS), Film Production.</p><h4>Government & Civic Structure:</h4><p>Atlanta operates under a strong Mayor-Council form of government.</p><h4>Notable People & Trivia:</h4><p>Its seal features a Phoenix, symbolizing its rebirth after the war. The Swan House, at the Atlanta History Center, was President Snow's mansion in *The Hunger Games*.</p><h4>Chinatown:</h4><p>Atlanta does not have a traditional, historic Chinatown. Instead, its vibrant Asian culture is concentrated along Buford Highway, a multi-lane corridor northeast of the city. Since the 1970s, this area has become a sprawling, authentic hub for dozens of nationalities, with a particularly strong presence of Chinese, Vietnamese, and Korean communities. You'll find countless restaurants, markets, and bakeries here. Additionally, the suburban city of Chamblee is home to the "Atlanta Chinatown Mall," a shopping center established in 1988 that serves as a cultural center for the Chinese community.</p>`
+                },
+                jekyll: {
+                    title: "Jekyll Island, Georgia",
+                    content: `<h4>A Dual Identity:</h4><p>Jekyll Island has a fascinating dual identity: it is both a protected natural sanctuary and a monument to Gilded Age opulence.</p><h4>The Jekyll Island Club:</h4><p>From 1888 to 1942, the island was owned by the Jekyll Island Club, an exclusive winter retreat for some of America's wealthiest families, including the Rockefellers, Morgans, and Vanderbilts. It was here in 1910 that a secret meeting was held to lay the groundwork for what would become the U.S. Federal Reserve System.</p><h4>State Park and Preservation:</h4><p>In 1947, the state of Georgia purchased the island and opened it as a state park. By law, 65% of the island must remain in a mostly natural state, preserving its beautiful maritime forests, marshes, and beaches.</p><h4>Driftwood Beach:</h4><p>Located on the north end of the island, this beach is famous for the skeletal remains of ancient live oak and pine trees, bleached and weathered by the sun and salt. It's a stunningly beautiful and surreal landscape, a testament to the constant, powerful forces of coastal erosion.</p>`
+                },
+                savannah: {
+                    title: "Savannah, Georgia",
+                    content: `<h4>Overview & Geography:</h4><p>Located on the coastal plain, the historic city is situated on <strong>Yamacraw Bluff</strong>, a 40-foot-high sandy bluff overlooking the Savannah River.</p><h4>Distinguishing Skyline Features:</h4><p>Savannah's skyline is low-rise, protected by historic preservation ordinances. Key features are the <strong>Talmadge Memorial Bridge</strong>, with pylons reaching 456 feet, and the French-Gothic twin spires of the <strong>Cathedral of St. John the Baptist</strong>, which rise 214 feet.</p><h4>Ecology, Flora & Fauna:</h4><p>Its famous squares are shaded by a canopy of Southern Live Oaks. On their branches, you can often spot <strong>Resurrection Fern</strong>, which appears dead but turns vibrant green after a rain shower.</p><h4>Etymology & Nicknames:</h4><p>Nickname: "The Hostess City of the South."</p><h4>Founding & Key Historical Events:</h4><p>Founded 1733 by James Oglethorpe. Spared destruction in 1864. In 1955, the Historic Savannah Foundation was formed, beginning a powerful preservation movement.</p><h4>Chinatown:</h4><p>Savannah does not have a designated Chinatown. The city's first Chinese residents arrived in the 1870s, and a small community of families, many of whom ran laundries and groceries, was established. However, this community remained small and dispersed, never forming a geographically distinct Chinatown neighborhood as seen in other American cities.</p>`
+                },
+                beaufort: {
+                    title: "Beaufort, South Carolina",
+                    content: `<h4>Overview & History:</h4><p>Chartered in 1711, Beaufort is the second-oldest city in South Carolina. Its entire downtown is designated as a National Historic Landmark. The city was one of the few in the South to be occupied by Union forces for most of the Civil War rather than being destroyed, which is why so much of its antebellum architecture remains perfectly preserved.</p><h4>Hollywood of the Lowcountry:</h4><p>Beaufort's scenic beauty has made it a popular filming location. It has served as the backdrop for numerous films, most famously as the fictional town of Greenbow, Alabama, in *Forrest Gump* and as the primary setting for *The Big Chill* and *The Great Santini*.</p><h4>Gullah Heritage:</h4><p>The surrounding Sea Islands, including St. Helena Island, are the heart of Gullah Geechee culture. This unique culture, with its own language, traditions, and arts, was developed by enslaved West Africans and has been preserved for generations in this relatively isolated coastal region.</p><h4>Chinatown:</h4><p>Beaufort does not have, nor has it ever had, a Chinatown. Its historical development was primarily shaped by European colonists, enslaved Africans, and their descendants.</p>`
+                },
+                 boneyard: {
+                    title: "Boneyard Beach, Bulls Island",
+                    content: `<h4>A Natural Wonder:</h4><p>Boneyard Beach is not a traditional sandy beach. It is a stunning, dramatic landscape created by the dynamic forces of coastal erosion. As the barrier island naturally migrates, the maritime forest is slowly consumed by the sea. The salt water kills the trees, and the wind and waves strip them of their bark, leaving behind smooth, sun-bleached skeletons of live oaks and cedars.</p><h4>Ecological Significance:</h4><p>Bulls Island is part of the Cape Romain National Wildlife Refuge, a vast and vital protected area for migratory birds, sea turtles, and other wildlife. The refuge contains one of the most significant nesting areas for loggerhead sea turtles on the East Coast. The island itself is home to an incredible diversity of bird species, making it a world-class birdwatching destination.</p><h4>A Sense of Isolation:</h4><p>Because access is limited to a ferry service, Bulls Island remains wild and undeveloped. A visit here feels like stepping back in time to a primeval coastline, offering a sense of solitude and raw natural beauty that is rare to find.</p>`
+                },
+                myrtle_beach: {
+                    title: "Myrtle Beach, South Carolina",
+                    content: `<h4>Overview & Geography:</h4><p>Myrtle Beach is the heart of the "Grand Strand," a 60-mile continuous stretch of beach on the Atlantic coast of South Carolina. It's a quintessential American beach resort town, known for its lively atmosphere and wide, sandy shores.</p><h4>Key Features:</h4><p>The city is famous for its celebrity-designed golf courses, the iconic SkyWheel (one of the tallest Ferris wheels in North America), and a bustling boardwalk filled with arcades, shops, and restaurants.</p><h4>Economic Profile:</h4><p>The economy is overwhelmingly driven by tourism, with millions of visitors flocking to the area each year, particularly during the spring and summer months.</p><h4>Trivia:</h4><p>The dance style known as the "Shag," which later became the official state dance of South Carolina, originated in the Myrtle Beach area in the 1940s.</p>`
+                },
+                charleston: {
+                    title: "Charleston, South Carolina",
+                    content: `<h4>Overview & Geography:</h4><p>Founded in 1670 as Charles Town, the city is defined by its cobblestone streets, horse-drawn carriages, and pastel antebellum houses. It sits on a peninsula at the confluence of the Ashley and Cooper rivers. Known as the "Holy City" due to the prominence of church steeples on its low-rise skyline, a feature protected by ordinance to this day.</p><h4>Architectural Influence:</h4><p>The city's unique "single house" architecture was designed to cope with the hot, humid climate. These homes are one room wide and several rooms deep, with long piazzas (porches) oriented to catch the prevailing sea breezes, providing natural air conditioning.</p><h4>Founding & Key Historical Events:</h4><p>A major center for trade in the colonial era, it was the fourth-largest city in the colonies. It played a major role in the slave trade and was the site of the first shots of the Civil War at Fort Sumter.</p><h4>Culture & Cuisine:</h4><p>Charleston is a culinary capital, known for Lowcountry cuisine which features shrimp and grits, she-crab soup, and fresh oysters. The Gullah culture, with its distinct language and traditions, has a strong influence on the region's arts and food.</p><h4>Chinatown:</h4><p>Charleston does not have a formal Chinatown. The first Chinese resident, a merchant, arrived in the 1780s. A small community of Chinese sailors and merchants grew in the 19th century, with many operating laundries and small shops along King Street. However, due to restrictive immigration laws and a small population, a distinct, residential Chinatown never fully formed.</p><h4>Optional Charleston Area Excursions:</h4><ul class="list-disc list-inside"><li><strong>The Angel Oak:</strong> Drive to Johns Island to visit the magnificent Angel Oak Tree, a Southern live oak estimated to be 400-500 years old. Its massive, sprawling branches are a sight to behold.</li><li><strong>Charleston Tea Garden:</strong> Visit the Charleston Tea Garden on nearby Wadmalaw Island, the only commercial tea plantation in North America. Take a factory tour and sample their teas.</li><li><strong>Shem Creek:</strong> Have a casual dinner at Shem Creek in Mount Pleasant, watching the shrimp boats come in.</li></ul>`
+                }
+            };
+
+            const verticalNav = document.getElementById('vertical-nav');
+            const navToggle = document.getElementById('nav-toggle');
+            const navArrow = document.getElementById('nav-arrow');
+            const mainContent = document.getElementById('main-content');
+            const dayLinksContainer = document.getElementById('day-links-container');
+            const itineraryContent = document.getElementById('itinerary-content');
+            const versionSwitcher = document.getElementById('version-switcher');
+            let map;
+            let mapInitialized = false;
+
+            function renderItinerary(version) {
+                itineraryContent.innerHTML = ''; // Clear existing content
+                const versionData = itineraryData[version];
+
+                versionData.forEach(dayData => {
+                    const dayElement = document.createElement('div');
+                    dayElement.id = `day-${dayData.day}`;
+                    dayElement.className = 'day-section mb-12';
+
+                    let dossierHtml = '';
+                    if (dayData.dossier && version === 'C') { // Only show dossier button for Version C
+                        const dossier = dossierData[dayData.dossier];
+                        dossierHtml = `
+                            <div class="mt-6">
+                                <button data-dossier="${dayData.dossier}" class="dossier-toggle-btn w-full bg-slate-700 text-white font-bold py-2 px-4 rounded-md hover:bg-slate-800 transition-colors">View ${dossier.title} Dossier</button>
+                                <div id="dossier-${dayData.dossier}" class="dossier-content bg-slate-100 mt-4 rounded-md border border-slate-200">
+                                    <h3 class="text-xl font-bold mt-2">Dossier: ${dossier.title}</h3>
+                                    ${dossier.content}
+                                </div>
+                            </div>
+                        `;
+                    }
+
+                    dayElement.innerHTML = `
+                        <div class="flex items-start">
+                            <div class="flex-shrink-0 w-8 h-8 bg-slate-700 rounded-full flex items-center justify-center mr-4"><span class="text-white font-bold text-sm">${dayData.day}</span></div>
+                            <div class="w-full">
+                                <div class="bg-white p-6 rounded-lg shadow-lg">
+                                    <h2 class="text-2xl font-bold mb-1">Day ${dayData.day}: ${dayData.date}</h2>
+                                    <h3 class="text-lg text-slate-600 font-medium mb-4">${dayData.title}</h3>
+                                    <div class="day-itinerary">${dayData.itinerary}</div>
+                                    ${dossierHtml}
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                    itineraryContent.appendChild(dayElement);
+                });
+                
+                // Add optional trip after day 14
+                const optionalTripHTML = `
+                    <div id="day-optional" class="day-section mb-12">
+                        <div class="flex items-start">
+                            <div class="flex-shrink-0 w-8 h-8 bg-slate-500 rounded-full flex items-center justify-center mr-4"><span class="text-white font-bold text-sm">?</span></div>
+                            <div class="w-full">
+                                <div class="bg-white p-6 rounded-lg shadow-lg border-2 border-dashed border-slate-300">
+                                    <h2 class="text-2xl font-bold mb-1">Optional Day Trip to Myrtle Beach</h2>
+                                    <h3 class="text-lg text-slate-600 font-medium mb-4">(Can be substituted for Day 13 or 14)</h3>
+                                    <div class="day-itinerary">
+                                        <p>This is the classic, high-energy American boardwalk experience. It's a total contrast to the historic sites, with a 187-foot-tall Ferris wheel (the <strong>SkyWheel</strong>), arcades, Ripley's Believe It or Not!, and a lively, fun atmosphere perfect for a more traditional beach vacation day.</p>
+                                        <p class="mt-2"><strong>Note:</strong> This involves a round trip of approximately 4 hours of driving from Charleston.</p>
+                                    </div>
+                                    ${version === 'C' ? `
+                                    <div class="mt-6">
+                                        <button data-dossier="myrtle_beach" class="dossier-toggle-btn w-full bg-slate-700 text-white font-bold py-2 px-4 rounded-md hover:bg-slate-800 transition-colors">View Myrtle Beach Dossier</button>
+                                        <div id="dossier-myrtle_beach" class="dossier-content bg-slate-100 mt-4 rounded-md border border-slate-200">
+                                            <h3 class="text-xl font-bold mt-2">Dossier: Myrtle Beach, South Carolina</h3>
+                                            ${dossierData.myrtle_beach.content}
+                                        </div>
+                                    </div>` : ''}
+                                </div>
+                            </div>
+                        </div>
+                    </div>`;
+                const day14Element = itineraryContent.querySelector('#day-14');
+                if (day14Element) {
+                    day14Element.insertAdjacentHTML('afterend', optionalTripHTML);
+                }
+
+
+                // Re-attach dossier toggle listeners after rendering
+                const dossierToggles = document.querySelectorAll('.dossier-toggle-btn');
+                dossierToggles.forEach(button => {
+                    button.addEventListener('click', () => {
+                        const dossierId = button.dataset.dossier;
+                        const content = document.getElementById(`dossier-${dossierId}`);
+                        content.classList.toggle('open');
+                    });
+                });
+                
+                // Re-observe sections for scrollspy
+                const daySections = document.querySelectorAll('.day-section');
+                 daySections.forEach(section => {
+                    if (section.id) {
+                        observer.observe(section);
+                    }
+                });
+            }
+
+            function initializeMap() {
+                if (mapInitialized) {
+                    // Invalidate map size in case the container was resized while hidden
+                    setTimeout(() => map.invalidateSize(), 0);
+                    return;
+                }
+                map = L.map('map').setView([33.5, -82.5], 6);
+
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    maxZoom: 19,
+                    attribution: '&copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+                }).addTo(map);
+
+                const locations = {
+                    "Charleston, SC": [32.7765, -79.9311],
+                    "Columbia, SC": [34.0007, -81.0348],
+                    "Clayton, GA": [34.8784, -83.4016],
+                    "Atlanta, GA": [33.7490, -84.3880],
+                    "Macon, GA (Ocmulgee)": [32.8385, -83.6069],
+                    "Jekyll Island, GA": [31.0538, -81.4218],
+                    "Savannah, GA": [32.0809, -81.0912],
+                    "Beaufort, SC": [32.4316, -80.6698],
+                    "Edisto Island, SC (Botany Bay)": [32.5516, -80.2587]
+                };
+
+                const routePoints = [
+                    locations["Charleston, SC"],
+                    locations["Columbia, SC"],
+                    locations["Clayton, GA"],
+                    locations["Atlanta, GA"],
+                    locations["Macon, GA (Ocmulgee)"],
+                    locations["Jekyll Island, GA"],
+                    locations["Savannah, GA"],
+                    locations["Beaufort, SC"],
+                    locations["Edisto Island, SC (Botany Bay)"],
+                    locations["Charleston, SC"]
+                ];
+
+                for (const [name, coords] of Object.entries(locations)) {
+                    L.marker(coords).addTo(map).bindPopup(name);
+                }
+
+                const polyline = L.polyline(routePoints, {color: '#334155', weight: 3}).addTo(map);
+                map.fitBounds(polyline.getBounds().pad(0.1));
+                
+                mapInitialized = true;
+            }
+
 
             // --- Populate Timeline Navigation ---
-            for (let i = 1; i <= 15; i++) {
-                const navItem = document.createElement('a');
-                navItem.textContent = `Day ${i}`;
-                navItem.href = `#day-${i}`;
-                navItem.dataset.day = i;
-                navItem.className = 'timeline-nav-item flex-shrink-0 text-center text-sm font-medium text-slate-600 bg-slate-200 rounded-full px-4 py-2 mr-2 hover:bg-slate-300';
-                timelineNav.appendChild(navItem);
-            }
-            const navItems = document.querySelectorAll('.timeline-nav-item');
+            const daysOfWeek = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+            const startDayIndex = 2; // Tuesday, August 5, 2025
 
-            // --- Dossier Toggle Logic ---
-            const dossierToggles = document.querySelectorAll('.dossier-toggle-btn');
-            dossierToggles.forEach(button => {
-                button.addEventListener('click', () => {
-                    const dossierId = button.dataset.dossier;
-                    const content = document.getElementById(`dossier-${dossierId}`);
-                    content.classList.toggle('open');
-                    
-                    if (content.classList.contains('open')) {
-                        switch(dossierId) {
-                            case 'columbia': if (!columbiaChart) renderColumbiaChart(); break;
-                            case 'charleston': if (!charlestonChart) renderCharlestonChart(); break;
-                            case 'savannah': if (!savannahChart) renderSavannahChart(); break;
-                            case 'atlanta': if (!atlantaChart) renderAtlantaChart(); break;
-                        }
+            for (let i = 1; i <= 15; i++) {
+                const dayName = daysOfWeek[(i - 1 + startDayIndex) % 7];
+                const navLink = document.createElement('a');
+                navLink.href = `#day-${i}`;
+                navLink.dataset.day = i;
+                navLink.className = 'nav-link block text-slate-600 py-2 px-4 rounded-md hover:bg-slate-100';
+                
+                const linkContent = document.createElement('div');
+                linkContent.className = 'flex justify-between items-center';
+                
+                const dayNumberSpan = document.createElement('span');
+                dayNumberSpan.className = 'font-medium';
+                dayNumberSpan.textContent = `Day ${i}`;
+                
+                const dayNameSpan = document.createElement('span');
+                dayNameSpan.className = 'text-sm text-slate-500 font-normal';
+                dayNameSpan.textContent = dayName;
+                
+                linkContent.appendChild(dayNumberSpan);
+                linkContent.appendChild(dayNameSpan);
+                navLink.appendChild(linkContent);
+
+                navLink.addEventListener('click', () => {
+                    if (window.innerWidth < 768) { // Close nav on mobile after click
+                        verticalNav.classList.remove('open');
+                        navToggle.style.transform = 'translateX(0px)';
+                        navArrow.innerHTML = '&raquo;';
+                    }
+                });
+                dayLinksContainer.appendChild(navLink);
+            }
+            const navLinks = document.querySelectorAll('.nav-link');
+
+            // --- Navigation Toggle Logic ---
+            navToggle.addEventListener('click', () => {
+                const isOpen = verticalNav.classList.toggle('open');
+                if (isOpen) {
+                    navArrow.innerHTML = '&laquo;';
+                    navToggle.style.transform = 'translateX(256px)'; // 256px = 16rem = w-64
+                    if (window.innerWidth >= 768) {
+                        mainContent.style.marginLeft = '256px';
+                    }
+                } else {
+                    navArrow.innerHTML = '&raquo;';
+                    navToggle.style.transform = 'translateX(0px)';
+                    mainContent.style.marginLeft = '0px';
+                }
+            });
+            
+            // --- Version Switcher Logic ---
+            versionSwitcher.addEventListener('click', (e) => {
+                if(e.target.tagName === 'BUTTON') {
+                    const selectedVersion = e.target.dataset.version;
+                    document.querySelectorAll('.version-btn').forEach(btn => btn.classList.remove('active'));
+                    e.target.classList.add('active');
+                    renderItinerary(selectedVersion);
+                }
+            });
+
+            // --- View Tab Switcher Logic ---
+            const viewTabs = document.querySelectorAll('.view-tab');
+            const itineraryView = document.getElementById('itinerary-view');
+            const mapView = document.getElementById('map-view');
+
+            viewTabs.forEach(tab => {
+                tab.addEventListener('click', () => {
+                    viewTabs.forEach(t => t.classList.remove('active'));
+                    tab.classList.add('active');
+                    const view = tab.dataset.view;
+
+                    if (view === 'map') {
+                        itineraryView.classList.add('hidden');
+                        mapView.classList.remove('hidden');
+                        verticalNav.classList.remove('open');
+                        navToggle.classList.add('hidden');
+                        mainContent.style.marginLeft = '0px';
+                        initializeMap();
+                    } else {
+                        itineraryView.classList.remove('hidden');
+                        mapView.classList.add('hidden');
+                        navToggle.classList.remove('hidden');
                     }
                 });
             });
-
-            // --- Chart Rendering Functions ---
-            const defaultChartOptions = {
-                responsive: true,
-                maintainAspectRatio: false,
-                indexAxis: 'y',
-                scales: { x: { beginAtZero: true }, y: { grid: { display: false } } },
-                plugins: { legend: { display: false } }
-            };
-
-            function renderColumbiaChart() {
-                const ctx = document.getElementById('columbiaSkylineChart').getContext('2d');
-                columbiaChart = new Chart(ctx, {
-                    type: 'bar',
-                    data: {
-                        labels: ['SC State House', 'Bank of America Plaza'],
-                        datasets: [{ label: 'Height (feet)', data: [180, 388], backgroundColor: ['rgba(51, 65, 85, 0.7)', 'rgba(29, 78, 216, 0.7)'], borderWidth: 1, borderRadius: 4 }]
-                    },
-                    options: { ...defaultChartOptions, scales: { x: { beginAtZero: true, title: { display: true, text: 'Height (ft)' } }, y: { grid: { display: false } } } }
-                });
-            }
-
-            function renderCharlestonChart() {
-                const ctx = document.getElementById('charlestonSteepleChart').getContext('2d');
-                charlestonChart = new Chart(ctx, {
-                    type: 'bar',
-                    data: {
-                        labels: ["St. Philip's", "St. Michael's", "Cathedral of St. John"],
-                        datasets: [{ label: 'Height (feet)', data: [200, 186, 175], backgroundColor: 'rgba(51, 65, 85, 0.7)', borderWidth: 1, borderRadius: 4 }]
-                    },
-                    options: { ...defaultChartOptions, scales: { x: { beginAtZero: true, title: { display: true, text: 'Spire Height (ft)' } }, y: { grid: { display: false } } } }
-                });
-            }
-            
-            function renderSavannahChart() {
-                const ctx = document.getElementById('savannahSquaresChart').getContext('2d');
-                savannahChart = new Chart(ctx, {
-                    type: 'pie',
-                    data: {
-                        labels: ['Surviving Squares', 'Lost Squares'],
-                        datasets: [{ label: 'Count', data: [22, 2], backgroundColor: ['rgba(29, 78, 216, 0.7)', 'rgba(203, 213, 225, 0.7)'], borderWidth: 1 }]
-                    },
-                    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'top' } } }
-                });
-            }
-            
-            function renderAtlantaChart() {
-                const ctx = document.getElementById('atlantaSkylineChart').getContext('2d');
-                atlantaChart = new Chart(ctx, {
-                    type: 'bar',
-                    data: {
-                        labels: ['Bank of America Plaza', 'Truist Plaza', '1180 Peachtree'],
-                        datasets: [{ label: 'Height (feet)', data: [1023, 902, 645], backgroundColor: 'rgba(29, 78, 216, 0.7)', borderWidth: 1, borderRadius: 4 }]
-                    },
-                    options: { ...defaultChartOptions, scales: { x: { beginAtZero: true, title: { display: true, text: 'Height (ft)' } }, y: { grid: { display: false } } } }
-                });
-            }
 
             // --- Scrollspy for Active Nav Item ---
             const observer = new IntersectionObserver((entries) => {
                 entries.forEach(entry => {
                     if (entry.isIntersecting) {
                         const dayId = entry.target.id.split('-')[1];
-                        navItems.forEach(item => {
-                            item.classList.toggle('active', item.dataset.day === dayId);
+                        navLinks.forEach(link => {
+                            link.classList.toggle('active', link.dataset.day === dayId);
                         });
                     }
                 });
             }, { rootMargin: "-50% 0px -50% 0px" });
 
-            daySections.forEach(section => {
-                if (section.id) {
-                    observer.observe(section);
-                }
-            });
+            // Initial Render
+            renderItinerary('A');
             
-            // Set initial active state
-            if (navItems.length > 0) {
-                navItems[0].classList.add('active');
+            // Set initial active state for nav link
+            if(navLinks.length > 0) {
+                navLinks[0].classList.add('active');
             }
         });
     </script>
