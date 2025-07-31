@@ -20,6 +20,9 @@
     -->
     <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
     <style>
+        html {
+            scroll-padding-top: 10rem; /* Prevents content from being hidden under the sticky header when jumping to an anchor link */
+        }
         body {
             font-family: 'Roboto', sans-serif;
             background-color: #F8FAFC; /* slate-50 */
@@ -448,7 +451,8 @@
                 linkContent.appendChild(dayNameSpan);
                 navLink.appendChild(linkContent);
 
-                navLink.addEventListener('click', () => {
+                navLink.addEventListener('click', (e) => {
+                    currentVisibleDay = parseInt(e.currentTarget.dataset.day);
                     if (window.innerWidth < 768) { // Close nav on mobile after click
                         verticalNav.classList.remove('open');
                         navToggle.style.transform = 'translateX(0px)';
