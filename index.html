@@ -135,6 +135,11 @@
     <header class="bg-white/90 backdrop-blur-sm sticky top-0 z-40 shadow-sm">
         <div class="container mx-auto px-4 pt-3">
             <h1 class="text-2xl font-bold text-center text-slate-800">A 15-Day Southern Journey</h1>
+            <div id="version-switcher" class="flex justify-center items-center space-x-2 pt-3">
+                <button data-version="A" class="version-btn text-xs sm:text-sm bg-slate-200 text-slate-700 font-semibold py-2 px-3 rounded-full active">Version A: High-Level Summary</button>
+                <button data-version="B" class="version-btn text-xs sm:text-sm bg-slate-200 text-slate-700 font-semibold py-2 px-3 rounded-full">Version B: In-Depth Guide</button>
+                <button data-version="C" class="version-btn text-xs sm:text-sm bg-slate-200 text-slate-700 font-semibold py-2 px-3 rounded-full">Version C: Comprehensive Dossier</button>
+            </div>
             <div class="border-b border-slate-200 mt-4">
                 <nav class="-mb-px flex justify-center space-x-8" aria-label="Tabs">
                     <button class="view-tab active whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm text-slate-500 hover:text-slate-700 hover:border-slate-300" data-view="itinerary">
@@ -151,11 +156,6 @@
     <main id="main-content" class="container mx-auto px-4 py-8">
         
         <div id="itinerary-view">
-            <div id="version-switcher" class="flex justify-center items-center space-x-2 mb-8">
-                <button data-version="A" class="version-btn text-xs sm:text-sm bg-slate-200 text-slate-700 font-semibold py-2 px-3 rounded-full active">Version A: High-Level Summary</button>
-                <button data-version="B" class="version-btn text-xs sm:text-sm bg-slate-200 text-slate-700 font-semibold py-2 px-3 rounded-full">Version B: In-Depth Guide</button>
-                <button data-version="C" class="version-btn text-xs sm:text-sm bg-slate-200 text-slate-700 font-semibold py-2 px-3 rounded-full">Version C: Comprehensive Dossier</button>
-            </div>
             <div class="relative">
                 <div class="absolute left-4 -ml-px w-0.5 h-full bg-slate-300"></div>
                 <div id="itinerary-content">
@@ -282,6 +282,7 @@
             const versionSwitcher = document.getElementById('version-switcher');
             let map;
             let mapInitialized = false;
+            let currentVisibleDay = 1;
 
             function renderItinerary(version) {
                 itineraryContent.innerHTML = ''; // Clear existing content
@@ -481,6 +482,15 @@
                     document.querySelectorAll('.version-btn').forEach(btn => btn.classList.remove('active'));
                     e.target.classList.add('active');
                     renderItinerary(selectedVersion);
+
+                    // Scroll to the current day
+                    const targetDayElement = document.getElementById(`day-${currentVisibleDay}`);
+                    if (targetDayElement) {
+                        // We use a timeout to ensure the DOM has updated before scrolling
+                        setTimeout(() => {
+                             targetDayElement.scrollIntoView({ behavior: 'auto', block: 'start' });
+                        }, 0);
+                    }
                 }
             });
 
@@ -515,12 +525,15 @@
                 entries.forEach(entry => {
                     if (entry.isIntersecting) {
                         const dayId = entry.target.id.split('-')[1];
-                        navLinks.forEach(link => {
-                            link.classList.toggle('active', link.dataset.day === dayId);
-                        });
+                        if(dayId && !isNaN(dayId)){
+                            currentVisibleDay = parseInt(dayId);
+                            navLinks.forEach(link => {
+                                link.classList.toggle('active', link.dataset.day === dayId);
+                            });
+                        }
                     }
                 });
-            }, { rootMargin: "-50% 0px -50% 0px" });
+            }, { rootMargin: "-40% 0px -60% 0px" });
 
             // Initial Render
             renderItinerary('A');
